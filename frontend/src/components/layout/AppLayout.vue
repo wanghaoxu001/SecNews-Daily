@@ -2,7 +2,9 @@
   <div class="app-shell">
     <NavBar />
     <main class="app-main">
-      <slot />
+      <div class="app-main__inner">
+        <slot />
+      </div>
     </main>
   </div>
 </template>

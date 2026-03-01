@@ -1,6 +1,6 @@
 <template>
-  <div>
-    <div class="news-management__filters">
+  <div class="news-management">
+    <section class="news-management__filters surface-card">
       <n-input
         v-model:value="filters.keyword"
         placeholder="搜索标题..."
@@ -49,11 +49,13 @@
         clearable
         class="news-management__field news-management__field--range"
       />
-      <n-button type="primary" @click="handleQuery">查询</n-button>
-      <n-button @click="resetFilters">重置</n-button>
-    </div>
+      <div class="news-management__filter-actions">
+        <n-button type="primary" @click="handleQuery">查询</n-button>
+        <n-button @click="resetFilters">重置</n-button>
+      </div>
+    </section>
 
-    <div v-if="checkedKeys.length > 0" class="news-management__batch-bar">
+    <div v-if="checkedKeys.length > 0" class="news-management__batch-bar surface-card">
       <span>已选 {{ checkedKeys.length }} 条</span>
       <n-select
         v-model:value="reprocessTarget"
@@ -79,49 +81,52 @@
       </n-popconfirm>
     </div>
 
-    <div v-if="isMobile" class="news-management__mobile-list">
-      <article v-for="item in newsList" :key="item.id" class="news-management__mobile-item surface-card">
-        <div class="news-management__mobile-item-head">
-          <n-checkbox
-            :checked="checkedKeys.includes(item.id)"
-            @update:checked="(checked) => toggleChecked(item.id, checked)"
-          />
-          <div class="news-management__mobile-item-title">{{ item.title_zh || item.title }}</div>
-        </div>
+    <section class="news-management__content surface-card">
+      <div v-if="isMobile" class="news-management__mobile-list">
+        <article v-for="item in newsList" :key="item.id" class="news-management__mobile-item">
+          <div class="news-management__mobile-item-head">
+            <n-checkbox
+              :checked="checkedKeys.includes(item.id)"
+              @update:checked="(checked) => toggleChecked(item.id, checked)"
+            />
+            <div class="news-management__mobile-item-title">{{ item.title_zh || item.title }}</div>
+          </div>
 
-        <div class="news-management__mobile-meta">
-          <n-tag size="small" :type="STATUS_COLORS[item.process_status] || 'default'">
-            {{ STATUS_LABELS[item.process_status] || item.process_status }}
-          </n-tag>
-          <n-tag v-if="item.category" size="small" :bordered="false" :color="{ color: (CATEGORY_COLORS[item.category] || '#ccc') + '20', textColor: CATEGORY_COLORS[item.category] || '#666' }">
-            {{ item.category }}
-          </n-tag>
-          <n-tag v-if="item.is_important" size="small" type="success">重要</n-tag>
-          <n-tag v-if="item.is_similar" size="small" type="warning">重复</n-tag>
-        </div>
+          <div class="news-management__mobile-meta">
+            <n-tag size="small" :type="STATUS_COLORS[item.process_status] || 'default'">
+              {{ STATUS_LABELS[item.process_status] || item.process_status }}
+            </n-tag>
+            <n-tag v-if="item.category" size="small" :bordered="false" :color="{ color: (CATEGORY_COLORS[item.category] || '#ccc') + '20', textColor: CATEGORY_COLORS[item.category] || '#666' }">
+              {{ item.category }}
+            </n-tag>
+            <n-tag v-if="item.is_important" size="small" type="success">重要</n-tag>
+            <n-tag v-if="item.is_similar" size="small" type="warning">重复</n-tag>
+          </div>
 
-        <div class="news-management__mobile-sub">来源：{{ item.source_name || '-' }}</div>
-        <div class="news-management__mobile-sub">发布时间：{{ item.published_at ? formatDateTime(item.published_at) : '-' }}</div>
+          <div class="news-management__mobile-sub">来源：{{ item.source_name || '-' }}</div>
+          <div class="news-management__mobile-sub">发布时间：{{ item.published_at ? formatDateTime(item.published_at) : '-' }}</div>
 
-        <div class="actions-row">
-          <n-button size="tiny" @click="openDetail(item)">详情</n-button>
-        </div>
-      </article>
-    </div>
+          <div class="actions-row">
+            <n-button size="tiny" @click="openDetail(item)">详情</n-button>
+          </div>
+        </article>
+      </div>
 
-    <n-data-table
-      v-else
-      :columns="columns"
-      :data="newsList"
-      :loading="newsQuery.isLoading.value || newsQuery.isFetching.value"
-      :row-key="(row: News) => row.id"
-      size="small"
-      :checked-row-keys="checkedKeys"
-      @update:checked-row-keys="checkedKeys = $event as number[]"
-      :scroll-x="1200"
-    />
+      <n-data-table
+        v-else
+        class="news-management__table"
+        :columns="columns"
+        :data="newsList"
+        :loading="newsQuery.isLoading.value || newsQuery.isFetching.value"
+        :row-key="(row: News) => row.id"
+        size="small"
+        :checked-row-keys="checkedKeys"
+        @update:checked-row-keys="checkedKeys = $event as number[]"
+        :scroll-x="1200"
+      />
+    </section>
 
-    <div class="actions-row actions-row--end" style="margin-top: var(--space-3);">
+    <div class="actions-row actions-row--end news-management__pagination">
       <n-pagination
         v-model:page="page"
         :page-size="pageSize"
@@ -420,11 +425,17 @@ async function handleBatchDelete() {
 </script>
 
 <style scoped>
+.news-management {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
 .news-management__filters {
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  padding: var(--space-4);
   align-items: end;
 }
 
@@ -441,19 +452,32 @@ async function handleBatchDelete() {
   grid-column: span 2;
 }
 
+.news-management__filter-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
 .news-management__batch-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
-  margin-bottom: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  background: #f0f9ff;
-  border-radius: var(--radius-s);
+  padding: var(--space-3) var(--space-4);
+  background: color-mix(in srgb, var(--color-brand-soft) 58%, #ffffff 42%);
 }
 
 .news-management__batch-select {
   width: 220px;
+}
+
+.news-management__content {
+  padding: var(--space-3);
+}
+
+.news-management__table :deep(.n-data-table-wrapper) {
+  border-radius: var(--radius-s);
+  overflow: hidden;
 }
 
 .news-management__mobile-list {
@@ -463,6 +487,9 @@ async function handleBatchDelete() {
 }
 
 .news-management__mobile-item {
+  border: 1px solid var(--color-line-subtle);
+  border-radius: var(--radius-s);
+  background: color-mix(in srgb, var(--color-panel) 88%, var(--color-panel-muted) 12%);
   padding: var(--space-3);
 }
 
@@ -490,6 +517,10 @@ async function handleBatchDelete() {
   color: var(--color-text-muted);
 }
 
+.news-management__pagination {
+  margin-top: calc(var(--space-2) * -1);
+}
+
 @media (max-width: 1279px) {
   .news-management__filters {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -499,16 +530,23 @@ async function handleBatchDelete() {
   .news-management__field--range {
     grid-column: span 2;
   }
+
+  .news-management__filter-actions {
+    grid-column: span 4;
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 767px) {
   .news-management__filters {
     grid-template-columns: 1fr;
+    padding: var(--space-3);
   }
 
   .news-management__field,
   .news-management__field--keyword,
-  .news-management__field--range {
+  .news-management__field--range,
+  .news-management__filter-actions {
     grid-column: span 1;
   }
 

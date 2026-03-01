@@ -2,6 +2,10 @@
   box-sizing: border-box;
 }
 
+::selection {
+  background: color-mix(in srgb, var(--color-brand-500) 25%, #ffffff 75%);
+}
+
 html,
 body,
 #app {
@@ -10,55 +14,102 @@ body,
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: var(--color-text);
-  background: radial-gradient(circle at top right, #edf4ff 0%, var(--color-bg) 42%, #eef2f8 100%);
+  position: relative;
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+  background:
+    radial-gradient(circle at 8% -12%, color-mix(in srgb, var(--color-brand-soft) 88%, #ffffff 12%) 0%, transparent 40%),
+    radial-gradient(circle at 92% -10%, color-mix(in srgb, var(--color-canvas-accent) 78%, #ffffff 22%) 0%, transparent 44%),
+    linear-gradient(180deg, var(--color-canvas) 0%, #eef3fb 38%, #e9f0fa 100%);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--color-line-subtle) 20%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 28px 28px;
+  opacity: 0.2;
 }
 
 a {
   color: inherit;
 }
 
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-brand-500) 75%, #ffffff 25%);
+  outline-offset: 2px;
+}
+
 .app-shell {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .app-main {
   flex: 1;
-  padding: var(--space-6);
+  padding: var(--space-7) var(--space-6) var(--space-8);
+}
+
+.app-main__inner {
+  width: 100%;
 }
 
 .page-container {
-  width: 100%;
-  max-width: var(--content-max-width);
+  width: min(100%, var(--content-max-width));
   margin: 0 auto;
 }
 
 .page-container--wide {
-  max-width: var(--content-max-width-wide);
+  width: min(100%, var(--content-max-width-wide));
 }
 
 .page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-4);
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.section-eyebrow {
+  margin: 0 0 var(--space-2) 0;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
 }
 
 .page-title {
   margin: 0;
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: 0.2px;
+  font-size: clamp(30px, 4vw, 36px);
+  line-height: 1.12;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.page-subtitle {
+  margin: var(--space-2) 0 0 0;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .empty-state {
   text-align: center;
-  padding: 64px 12px;
-  color: var(--color-text-muted);
+  padding: 72px var(--space-4);
+  color: var(--color-text-tertiary);
+  border: 1px dashed var(--color-line-strong);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--color-panel-muted) 82%, #ffffff 18%);
 }
 
 .actions-row {
@@ -73,28 +124,52 @@ a {
 }
 
 .surface-card {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-line-subtle);
   border-radius: var(--radius-m);
-  background: color-mix(in srgb, var(--color-surface) 85%, #f8fbff 15%);
+  background: color-mix(in srgb, var(--color-panel) 90%, #f7faff 10%);
+  box-shadow: var(--shadow-1);
+}
+
+.surface-card--muted {
+  background: color-mix(in srgb, var(--color-panel-muted) 86%, #ffffff 14%);
 }
 
 @media (max-width: 1023px) {
   .app-main {
-    padding: var(--space-5);
+    padding: var(--space-6) var(--space-5) var(--space-7);
+  }
+
+  .page-title {
+    font-size: clamp(28px, 4.3vw, 34px);
   }
 }
 
 @media (max-width: 767px) {
   .app-main {
-    padding: var(--space-4);
+    padding: var(--space-5) var(--space-4) var(--space-6);
   }
 
   .page-header {
     flex-direction: column;
     align-items: stretch;
+    margin-bottom: var(--space-4);
   }
 
   .page-title {
-    font-size: 22px;
+    font-size: clamp(24px, 7vw, 30px);
+  }
+
+  .empty-state {
+    padding: 56px var(--space-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
   }
 }

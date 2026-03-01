@@ -1,80 +1,96 @@
 <template>
-  <n-spin :show="configsQuery.isLoading.value || cooldownQuery.isLoading.value">
-    <n-card title="全局默认配置" size="small" style="margin-bottom: var(--space-4);">
-      <n-form v-if="defaultConfig.id" label-placement="left" label-width="100">
-        <n-grid :cols="2" :x-gap="16">
-          <n-gi>
-            <n-form-item label="Base URL">
-              <n-input v-model:value="defaultConfig.base_url" placeholder="http://localhost:11434" />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="API Key">
-              <n-input v-model:value="defaultConfig.api_key" type="password" show-password-on="click" placeholder="sk-..." />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="默认模型">
-              <n-input v-model:value="defaultConfig.model" placeholder="gpt-4o-mini" />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="Temperature">
-              <n-input-number v-model:value="defaultConfig.temperature" :min="0" :max="2" :step="0.1" style="width: 100%;" />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="Max Tokens">
-              <n-input-number v-model:value="defaultConfig.max_tokens" :min="0" style="width: 100%;" />
-            </n-form-item>
-          </n-gi>
-          <n-gi>
-            <n-form-item label="请求冷却(秒)">
-              <n-input-number v-model:value="cooldownSeconds" :min="0" :step="0.5" :precision="1" style="width: 100%;" placeholder="0 表示无冷却" />
-            </n-form-item>
-          </n-gi>
-        </n-grid>
-        <div class="actions-row actions-row--end">
-          <n-button type="primary" size="small" :loading="saveDefaultMutation.isPending.value" @click="saveDefault">保存全局配置</n-button>
-          <n-button size="small" :loading="testingDefault" @click="testConfig('default')">测试连接</n-button>
-        </div>
-      </n-form>
-    </n-card>
+  <div class="llm-config">
+    <n-spin :show="configsQuery.isLoading.value || cooldownQuery.isLoading.value">
+      <n-card title="全局默认配置" size="small" class="llm-config__card">
+        <n-form v-if="defaultConfig.id" label-placement="left" label-width="100" class="llm-config__form">
+          <n-grid :cols="2" :x-gap="16">
+            <n-gi>
+              <n-form-item label="Base URL">
+                <n-input v-model:value="defaultConfig.base_url" placeholder="http://localhost:11434" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="API Key">
+                <n-input v-model:value="defaultConfig.api_key" type="password" show-password-on="click" placeholder="sk-..." />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="默认模型">
+                <n-input v-model:value="defaultConfig.model" placeholder="gpt-4o-mini" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="Temperature">
+                <n-input-number v-model:value="defaultConfig.temperature" :min="0" :max="2" :step="0.1" class="llm-config__number-input" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="Max Tokens">
+                <n-input-number v-model:value="defaultConfig.max_tokens" :min="0" class="llm-config__number-input" />
+              </n-form-item>
+            </n-gi>
+            <n-gi>
+              <n-form-item label="请求冷却(秒)">
+                <n-input-number v-model:value="cooldownSeconds" :min="0" :step="0.5" :precision="1" class="llm-config__number-input" placeholder="0 表示无冷却" />
+              </n-form-item>
+            </n-gi>
+          </n-grid>
+          <div class="actions-row actions-row--end">
+            <n-button type="primary" size="small" :loading="saveDefaultMutation.isPending.value" @click="saveDefault">保存全局配置</n-button>
+            <n-button size="small" :loading="testingDefault" @click="testConfig('default')">测试连接</n-button>
+          </div>
+        </n-form>
+      </n-card>
 
-    <n-card title="任务配置" size="small">
-      <template #header-extra>
-        <n-text depth="3" style="font-size: 12px;">留空则继承全局默认值</n-text>
-      </template>
-      <n-data-table :columns="columns" :data="taskConfigs" size="small" />
-    </n-card>
+      <n-card title="任务配置" size="small">
+        <template #header-extra>
+          <n-text depth="3" class="llm-config__hint">留空则继承全局默认值</n-text>
+        </template>
+        <n-data-table :columns="columns" :data="taskConfigs" size="small" />
+      </n-card>
 
-    <n-modal v-model:show="showModal" preset="dialog" :title="`编辑 ${editForm.task_type} 配置`" style="width: min(480px, 92vw);">
-      <n-form label-placement="left" label-width="100">
-        <n-form-item label="模型">
-          <n-input v-model:value="editForm.model" :placeholder="defaultConfig.model || ''" />
-        </n-form-item>
-        <n-form-item label="Temperature">
-          <n-input-number v-model:value="editForm.temperature" :min="0" :max="2" :step="0.1"
-            :placeholder="defaultConfig.temperature?.toString() || ''" style="width: 100%;" />
-        </n-form-item>
-        <n-form-item label="Max Tokens">
-          <n-input-number v-model:value="editForm.max_tokens" :min="0"
-            :placeholder="defaultConfig.max_tokens?.toString() || ''" style="width: 100%;" />
-        </n-form-item>
-        <n-form-item label="Base URL">
-          <n-input v-model:value="editForm.base_url" :placeholder="defaultConfig.base_url || '留空继承全局'" />
-        </n-form-item>
-        <n-form-item label="API Key">
-          <n-input v-model:value="editForm.api_key" type="password" show-password-on="click"
-            :placeholder="'留空继承全局'" />
-        </n-form-item>
-      </n-form>
-      <template #action>
-        <n-button @click="showModal = false">取消</n-button>
-        <n-button type="primary" :loading="saveTaskMutation.isPending.value" @click="saveTaskConfig">保存</n-button>
-      </template>
-    </n-modal>
-  </n-spin>
+      <n-modal v-model:show="showModal" preset="dialog" :title="`编辑 ${editForm.task_type} 配置`" :style="modalStyle">
+        <n-form label-placement="left" label-width="100" class="llm-config__form">
+          <n-form-item label="模型">
+            <n-input v-model:value="editForm.model" :placeholder="defaultConfig.model || ''" />
+          </n-form-item>
+          <n-form-item label="Temperature">
+            <n-input-number
+              v-model:value="editForm.temperature"
+              :min="0"
+              :max="2"
+              :step="0.1"
+              :placeholder="defaultConfig.temperature?.toString() || ''"
+              class="llm-config__number-input"
+            />
+          </n-form-item>
+          <n-form-item label="Max Tokens">
+            <n-input-number
+              v-model:value="editForm.max_tokens"
+              :min="0"
+              :placeholder="defaultConfig.max_tokens?.toString() || ''"
+              class="llm-config__number-input"
+            />
+          </n-form-item>
+          <n-form-item label="Base URL">
+            <n-input v-model:value="editForm.base_url" :placeholder="defaultConfig.base_url || '留空继承全局'" />
+          </n-form-item>
+          <n-form-item label="API Key">
+            <n-input
+              v-model:value="editForm.api_key"
+              type="password"
+              show-password-on="click"
+              :placeholder="'留空继承全局'"
+            />
+          </n-form-item>
+        </n-form>
+        <template #action>
+          <n-button @click="showModal = false">取消</n-button>
+          <n-button type="primary" :loading="saveTaskMutation.isPending.value" @click="saveTaskConfig">保存</n-button>
+        </template>
+      </n-modal>
+    </n-spin>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -120,6 +136,9 @@ const allConfigs = ref<LlmConfig[]>([])
 const cooldownSeconds = ref<number>(0)
 const defaultConfig = reactive<Partial<LlmConfig>>({})
 const editForm = ref<Partial<LlmConfig>>({})
+const modalStyle = {
+  width: 'min(480px, 92vw)',
+}
 
 const configsQuery = useQuery({
   queryKey: queryKeys.llmConfigs.all,
@@ -209,11 +228,11 @@ const columns = [
   {
     title: '任务类型',
     key: 'task_type',
-    width: 140,
+    width: 170,
     render(row: LlmConfig) {
       return h('span', {}, [
         h(NTag, { size: 'small', bordered: false, type: 'info' }, { default: () => row.task_type }),
-        h('span', { style: 'margin-left: 8px; color: #666; font-size: 12px;' }, TASK_TYPE_LABELS[row.task_type] || ''),
+        h('span', { class: 'llm-config__task-desc' }, TASK_TYPE_LABELS[row.task_type] || ''),
       ])
     },
   },
@@ -227,13 +246,19 @@ const columns = [
     title: 'Temperature',
     key: 'temperature',
     width: 110,
-    render: (row: LlmConfig) => row.temperature != null ? String(row.temperature) : h(NText, { depth: 3 }, { default: () => '继承全局' }),
+    render: (row: LlmConfig) =>
+      row.temperature != null
+        ? String(row.temperature)
+        : h(NText, { depth: 3 }, { default: () => '继承全局' }),
   },
   {
     title: 'Max Tokens',
     key: 'max_tokens',
     width: 110,
-    render: (row: LlmConfig) => row.max_tokens != null ? String(row.max_tokens) : h(NText, { depth: 3 }, { default: () => '继承全局' }),
+    render: (row: LlmConfig) =>
+      row.max_tokens != null
+        ? String(row.max_tokens)
+        : h(NText, { depth: 3 }, { default: () => '继承全局' }),
   },
   {
     title: 'Base URL',
@@ -296,3 +321,35 @@ async function testConfig(taskType: string) {
   }
 }
 </script>
+
+<style scoped>
+.llm-config {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.llm-config__card {
+  margin-bottom: var(--space-4);
+}
+
+.llm-config__hint {
+  font-size: 12px;
+}
+
+.llm-config__number-input {
+  width: 100%;
+}
+
+.llm-config__task-desc {
+  margin-left: 8px;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+}
+
+@media (max-width: 767px) {
+  .llm-config__card {
+    margin-bottom: var(--space-3);
+  }
+}
+</style>

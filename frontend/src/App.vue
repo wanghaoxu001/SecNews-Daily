@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider>
+  <n-config-provider :theme-overrides="themeOverrides">
     <n-message-provider>
       <router-view />
     </n-message-provider>
@@ -8,4 +8,5 @@
 
 <script setup lang="ts">
 import { NConfigProvider, NMessageProvider } from 'naive-ui'
+import { themeOverrides } from './styles/naiveTheme'
 </script>
