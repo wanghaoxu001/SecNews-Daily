@@ -24,7 +24,8 @@
               <span v-else-if="log.status === 'success'" style="color: #18a058; flex-shrink: 0;">✓</span>
               <span v-else-if="log.status === 'error'" style="color: #d03050; flex-shrink: 0;">✗</span>
               <span v-else style="color: #2080f0; flex-shrink: 0;">·</span>
-              <span :style="{ color: log.status === 'error' ? '#d03050' : undefined }">{{ log.message }}</span>
+              <span style="flex: 1;" :style="{ color: log.status === 'error' ? '#d03050' : undefined }">{{ log.message }}</span>
+              <span v-if="log.duration_ms != null" style="flex-shrink: 0; color: #999; font-size: 12px; white-space: nowrap;">{{ formatDuration(log.duration_ms) }}</span>
             </div>
             <pre v-if="log.detail" style="margin: 4px 0 0 20px; padding: 8px; background: #f5f5f5; border-radius: 4px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all;">{{ log.detail }}</pre>
           </div>
@@ -58,6 +59,15 @@ const runSourceName = ref('')
 const runLogs = ref<PipelineEvent[]>([])
 const running = ref(false)
 const logContainerRef = ref<HTMLElement | null>(null)
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  const seconds = ms / 1000
+  if (seconds < 60) return `${seconds.toFixed(1)}s`
+  const minutes = Math.floor(seconds / 60)
+  const remainSec = (seconds % 60).toFixed(0)
+  return `${minutes}m${remainSec}s`
+}
 
 function scrollToBottom() {
   nextTick(() => {

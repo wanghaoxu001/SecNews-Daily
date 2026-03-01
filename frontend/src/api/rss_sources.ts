@@ -25,6 +25,7 @@ export interface PipelineEvent {
   status: 'running' | 'success' | 'error' | 'info'
   message: string
   detail?: string
+  duration_ms?: number
 }
 
 export async function runSourcePipeline(
