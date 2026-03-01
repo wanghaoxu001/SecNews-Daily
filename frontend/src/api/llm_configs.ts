@@ -1,6 +1,12 @@
 import client from './client'
 import type { LlmConfig } from '../types'
 
+export interface LlmTestResult {
+  success: boolean
+  message: string
+  latency_ms: number
+}
+
 export async function fetchLlmConfigs(): Promise<LlmConfig[]> {
   const resp = await client.get<LlmConfig[]>('/llm-configs')
   return resp.data
@@ -23,4 +29,9 @@ export async function updateLlmConfig(id: number, data: Partial<LlmConfig>): Pro
 
 export async function deleteLlmConfig(id: number): Promise<void> {
   await client.delete(`/llm-configs/${id}`)
+}
+
+export async function testLlmConfig(taskType: string): Promise<LlmTestResult> {
+  const resp = await client.post<LlmTestResult>(`/llm-configs/test/${taskType}`)
+  return resp.data
 }

@@ -29,3 +29,9 @@ class LlmConfigResponse(LlmConfigBase):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class LlmTestResponse(BaseModel):
+    success: bool
+    message: str
+    latency_ms: int
