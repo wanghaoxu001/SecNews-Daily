@@ -2,12 +2,15 @@ import time
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.auth import get_current_user
 from app.crud.llm_config import crud_llm_config, ALL_TASK_TYPES
 from app.schemas.llm_config import LlmConfigCreate, LlmConfigUpdate, LlmConfigResponse, LlmTestResponse
+from app.models.processing_config import ProcessingConfig
 
 router = APIRouter(prefix="/llm-configs", tags=["llm-configs"], dependencies=[Depends(get_current_user)])
 
@@ -70,6 +73,39 @@ async def test_config(task_type: str, db: AsyncSession = Depends(get_db)):
     except Exception as e:
         latency_ms = int((time.time() - start) * 1000)
         return LlmTestResponse(success=False, message=f"连接失败: {str(e)}", latency_ms=latency_ms)
+
+
+class CooldownBody(BaseModel):
+    seconds: float
+
+
+@router.get("/cooldown")
+async def get_cooldown(db: AsyncSession = Depends(get_db)):
+    """Get LLM call cooldown seconds."""
+    result = await db.execute(
+        select(ProcessingConfig.value).where(ProcessingConfig.key == "llm_cooldown_seconds")
+    )
+    val = result.scalar_one_or_none()
+    try:
+        seconds = float(val) if val is not None else 0.0
+    except (ValueError, TypeError):
+        seconds = 0.0
+    return {"seconds": seconds}
+
+
+@router.put("/cooldown")
+async def set_cooldown(body: CooldownBody, db: AsyncSession = Depends(get_db)):
+    """Set LLM call cooldown seconds."""
+    result = await db.execute(
+        select(ProcessingConfig).where(ProcessingConfig.key == "llm_cooldown_seconds")
+    )
+    row = result.scalar_one_or_none()
+    if row:
+        row.value = str(body.seconds)
+    else:
+        db.add(ProcessingConfig(key="llm_cooldown_seconds", value=str(body.seconds), description="LLM 请求冷却时间（秒）"))
+    await db.commit()
+    return {"seconds": body.seconds}
 
 
 @router.get("/{config_id}", response_model=LlmConfigResponse)

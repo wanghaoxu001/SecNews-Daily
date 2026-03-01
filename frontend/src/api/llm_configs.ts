@@ -35,3 +35,12 @@ export async function testLlmConfig(taskType: string): Promise<LlmTestResult> {
   const resp = await client.post<LlmTestResult>(`/llm-configs/test/${taskType}`)
   return resp.data
 }
+
+export async function getLlmCooldown(): Promise<number> {
+  const resp = await client.get<{ seconds: number }>('/llm-configs/cooldown')
+  return resp.data.seconds
+}
+
+export async function setLlmCooldown(seconds: number): Promise<void> {
+  await client.put('/llm-configs/cooldown', { seconds })
+}

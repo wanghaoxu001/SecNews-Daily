@@ -29,6 +29,11 @@
               <n-input-number v-model:value="defaultConfig.max_tokens" :min="0" style="width: 100%;" />
             </n-form-item>
           </n-gi>
+          <n-gi>
+            <n-form-item label="请求冷却(秒)">
+              <n-input-number v-model:value="cooldownSeconds" :min="0" :step="0.5" :precision="1" style="width: 100%;" placeholder="0 表示无冷却" />
+            </n-form-item>
+          </n-gi>
         </n-grid>
         <div style="text-align: right;">
           <n-button type="primary" size="small" :loading="savingDefault" @click="saveDefault">保存全局配置</n-button>
@@ -82,7 +87,7 @@ import {
   NInput, NInputNumber, NModal, NSpin, NText, NTag, NSpace,
   useMessage,
 } from 'naive-ui'
-import { ensureLlmDefaults, updateLlmConfig, testLlmConfig } from '../../api/llm_configs'
+import { ensureLlmDefaults, updateLlmConfig, testLlmConfig, getLlmCooldown, setLlmCooldown } from '../../api/llm_configs'
 import type { LlmConfig } from '../../types'
 
 const TASK_TYPE_LABELS: Record<string, string> = {
@@ -103,7 +108,7 @@ const testingDefault = ref(false)
 const testingTaskType = ref<string | null>(null)
 
 const allConfigs = ref<LlmConfig[]>([])
-
+const cooldownSeconds = ref<number>(0)
 const defaultConfig = reactive<Partial<LlmConfig>>({})
 
 const taskConfigs = computed(() =>
@@ -158,6 +163,7 @@ async function loadData() {
     if (cfg) {
       Object.assign(defaultConfig, cfg)
     }
+    cooldownSeconds.value = await getLlmCooldown()
   } finally {
     loading.value = false
   }
@@ -174,6 +180,7 @@ async function saveDefault() {
       temperature: defaultConfig.temperature,
       max_tokens: defaultConfig.max_tokens,
     })
+    await setLlmCooldown(cooldownSeconds.value ?? 0)
     await loadData()
     message.success('全局配置已保存')
   } catch {
