@@ -13,8 +13,8 @@ from app.services.classifier import classify_news
 logger = logging.getLogger(__name__)
 
 
-async def process_single_news(db: AsyncSession, news: News) -> None:
-    """Process a single pending news item: translate, summarize, classify."""
+async def process_single_news_gen(db: AsyncSession, news: News):
+    """Process a single pending news item as async generator, yielding progress messages."""
     try:
         news.process_status = ProcessStatus.processing.value
 
@@ -24,30 +24,48 @@ async def process_single_news(db: AsyncSession, news: News) -> None:
                 # Path A: has summary → translate it
                 if is_chinese(news.summary):
                     news.summary_zh = news.summary
+                    yield "摘要已为中文，跳过翻译"
                 else:
+                    yield "正在翻译摘要..."
                     news.summary_zh = await translate_text(db, news.summary)
+                    yield "摘要翻译完成"
             else:
                 # Path B: no summary → crawl content and generate
                 if not news.content:
+                    yield "正在抓取文章正文..."
                     news.content = await crawl_article_content(news.url)
                 if news.content:
+                    yield "正在生成中文摘要..."
                     news.summary_zh = await generate_summary(db, news.content)
+                    yield "摘要生成完成"
                 else:
                     news.summary_zh = ""
                     logger.warning(f"No content available for news {news.id}")
+                    yield "无法获取正文内容，摘要置空"
+        else:
+            yield "已有中文摘要，跳过"
 
         # Step 2: Translate title
         if not news.title_zh:
             if is_chinese(news.title):
                 news.title_zh = news.title
+                yield "标题已为中文，跳过翻译"
             else:
+                yield "正在翻译标题..."
                 news.title_zh = await translate_text(db, news.title)
+                yield "标题翻译完成"
+        else:
+            yield "已有中文标题，跳过"
 
         # Step 3: Classify
         if not news.category:
+            yield "正在分类..."
             title_for_classify = news.title_zh or news.title
             summary_for_classify = news.summary_zh or news.summary or ""
             news.category = await classify_news(db, title_for_classify, summary_for_classify)
+            yield f"分类完成: {news.category}"
+        else:
+            yield f"已有分类: {news.category}，跳过"
 
         news.process_status = ProcessStatus.processed.value
         news.process_error = None
@@ -58,6 +76,13 @@ async def process_single_news(db: AsyncSession, news: News) -> None:
         news.process_status = ProcessStatus.failed.value
         news.process_error = str(e)
         await db.commit()
+        yield f"处理失败: {e}"
+
+
+async def process_single_news(db: AsyncSession, news: News) -> None:
+    """Process a single pending news item: translate, summarize, classify."""
+    async for _ in process_single_news_gen(db, news):
+        pass
 
 
 async def process_pending_news(db: AsyncSession) -> dict:

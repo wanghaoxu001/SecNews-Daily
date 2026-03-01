@@ -14,13 +14,35 @@
         <n-button @click="handleSave" type="primary" :loading="saving">保存</n-button>
       </template>
     </n-modal>
+
+    <n-drawer :show="showRunDrawer" @update:show="showRunDrawer = $event" :width="520" placement="right">
+      <n-drawer-content :title="`抓取: ${runSourceName}`">
+        <div ref="logContainerRef" style="max-height: calc(100vh - 120px); overflow-y: auto;">
+          <div v-for="(log, i) in runLogs" :key="i" style="margin-bottom: 8px; font-size: 13px;">
+            <div style="display: flex; align-items: flex-start; gap: 6px;">
+              <n-spin v-if="log.status === 'running'" :size="14" style="flex-shrink: 0; margin-top: 3px;" />
+              <span v-else-if="log.status === 'success'" style="color: #18a058; flex-shrink: 0;">✓</span>
+              <span v-else-if="log.status === 'error'" style="color: #d03050; flex-shrink: 0;">✗</span>
+              <span v-else style="color: #2080f0; flex-shrink: 0;">·</span>
+              <span :style="{ color: log.status === 'error' ? '#d03050' : undefined }">{{ log.message }}</span>
+            </div>
+            <pre v-if="log.detail" style="margin: 4px 0 0 20px; padding: 8px; background: #f5f5f5; border-radius: 4px; font-size: 12px; overflow-x: auto; white-space: pre-wrap; word-break: break-all;">{{ log.detail }}</pre>
+          </div>
+        </div>
+      </n-drawer-content>
+    </n-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, h, onMounted } from 'vue'
-import { NButton, NDataTable, NModal, NForm, NFormItem, NInput, NSwitch, NTag, useMessage } from 'naive-ui'
-import { fetchRssSources, createRssSource, updateRssSource, deleteRssSource } from '../../api/rss_sources'
+import { ref, h, onMounted, nextTick } from 'vue'
+import {
+  NButton, NDataTable, NModal, NForm, NFormItem, NInput, NSwitch, NTag,
+  NDrawer, NDrawerContent, NSpin,
+  useMessage,
+} from 'naive-ui'
+import { fetchRssSources, createRssSource, updateRssSource, deleteRssSource, runSourcePipeline } from '../../api/rss_sources'
+import type { PipelineEvent } from '../../api/rss_sources'
 import type { RssSource } from '../../types'
 
 const message = useMessage()
@@ -29,6 +51,40 @@ const loading = ref(false)
 const saving = ref(false)
 const showModal = ref(false)
 const form = ref<Partial<RssSource>>({ enabled: true })
+
+// Run drawer state
+const showRunDrawer = ref(false)
+const runSourceName = ref('')
+const runLogs = ref<PipelineEvent[]>([])
+const running = ref(false)
+const logContainerRef = ref<HTMLElement | null>(null)
+
+function scrollToBottom() {
+  nextTick(() => {
+    if (logContainerRef.value) {
+      logContainerRef.value.scrollTop = logContainerRef.value.scrollHeight
+    }
+  })
+}
+
+async function handleRun(row: RssSource) {
+  if (running.value) return
+  runSourceName.value = row.name
+  runLogs.value = []
+  showRunDrawer.value = true
+  running.value = true
+
+  try {
+    await runSourcePipeline(row.id, (event: PipelineEvent) => {
+      runLogs.value.push(event)
+      scrollToBottom()
+    })
+  } catch (e: any) {
+    runLogs.value.push({ step: 'done', status: 'error', message: `连接失败: ${e.message}` })
+  } finally {
+    running.value = false
+  }
+}
 
 const columns = [
   { title: '名称', key: 'name', width: 150 },
@@ -40,9 +96,16 @@ const columns = [
     },
   },
   {
-    title: '操作', key: 'actions', width: 140,
+    title: '操作', key: 'actions', width: 200,
     render(row: RssSource) {
       return h('div', { style: 'display:flex;gap:8px' }, [
+        h(NButton, {
+          size: 'tiny',
+          type: 'primary',
+          secondary: true,
+          disabled: running.value,
+          onClick: () => handleRun(row),
+        }, { default: () => '抓取' }),
         h(NButton, { size: 'tiny', onClick: () => { form.value = { ...row }; showModal.value = true } }, { default: () => '编辑' }),
         h(NButton, { size: 'tiny', type: 'error', onClick: () => handleDelete(row.id) }, { default: () => '删除' }),
       ])
