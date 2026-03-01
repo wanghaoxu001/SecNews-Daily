@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 
 
@@ -38,3 +38,47 @@ class NewsListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class BatchReprocessRequest(BaseModel):
+    news_ids: list[int]
+    target_status: str
+
+    @field_validator("target_status")
+    @classmethod
+    def validate_target_status(cls, v: str) -> str:
+        allowed = {"pending", "processed", "similarity_checked"}
+        if v not in allowed:
+            raise ValueError(f"target_status must be one of {allowed}")
+        return v
+
+    @field_validator("news_ids")
+    @classmethod
+    def validate_news_ids(cls, v: list[int]) -> list[int]:
+        if not v:
+            raise ValueError("news_ids must not be empty")
+        if len(v) > 500:
+            raise ValueError("news_ids must not exceed 500")
+        return v
+
+
+class BatchReprocessResponse(BaseModel):
+    reset_count: int
+    pipeline_result: dict | None = None
+
+
+class BatchDeleteRequest(BaseModel):
+    news_ids: list[int]
+
+    @field_validator("news_ids")
+    @classmethod
+    def validate_news_ids(cls, v: list[int]) -> list[int]:
+        if not v:
+            raise ValueError("news_ids must not be empty")
+        if len(v) > 500:
+            raise ValueError("news_ids must not exceed 500")
+        return v
+
+
+class BatchDeleteResponse(BaseModel):
+    deleted_count: int
