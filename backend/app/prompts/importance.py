@@ -11,9 +11,9 @@ def importance_prompt(title: str, summary: str, category: str, examples: list[di
                 f"你是一位网络安全情报分析师，负责判断新闻对于「{category}」类别的重要性。\n\n"
                 f"以下是该分类的典型样本供参考：\n{examples_text}\n"
                 "请根据以上参考样本的标准，判断新的新闻是否重要。\n"
-                "回答格式：\n"
-                "重要: 是/否\n"
-                "理由: 简短说明"
+                "你必须仅返回一个 JSON 对象，不要返回 Markdown 代码块，不要输出额外解释。\n"
+                "JSON 格式如下：\n"
+                '{"is_important": true/false, "reason": "简短说明"}'
             ),
         },
         {

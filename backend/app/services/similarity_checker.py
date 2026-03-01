@@ -1,4 +1,6 @@
 import logging
+import json
+import re
 
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +20,67 @@ KEYWORD_WEIGHT = 0.4
 EMBEDDING_WEIGHT = 0.3
 SIMILARITY_THRESHOLD = 0.5
 TOP_K = 3
+MAX_PARSE_ATTEMPTS = 3
+
+
+def _sanitize_json_response(raw: str) -> str:
+    text = raw.replace("\ufeff", "").strip()
+
+    code_fence = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, flags=re.IGNORECASE)
+    if code_fence:
+        text = code_fence.group(1).strip()
+
+    obj_start = text.find("{")
+    obj_end = text.rfind("}")
+    if obj_start != -1 and obj_end != -1 and obj_end > obj_start:
+        text = text[obj_start:obj_end + 1]
+
+    text = re.sub(r",(\s*[}\]])", r"\1", text)
+    return text
+
+
+def _parse_bool_value(value: object) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "是", "相似"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "否", "不相似"}:
+            return False
+    return None
+
+
+def _parse_similarity_json(raw: str) -> tuple[bool, str]:
+    cleaned = _sanitize_json_response(raw)
+    try:
+        payload = json.loads(cleaned)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON response: {exc}") from exc
+
+    if not isinstance(payload, dict):
+        raise ValueError("Similarity response must be a JSON object")
+
+    raw_is_similar = (
+        payload.get("is_similar")
+        if "is_similar" in payload
+        else payload.get("similar", payload.get("isSimilar", payload.get("相似")))
+    )
+    is_similar = _parse_bool_value(raw_is_similar)
+    if is_similar is None:
+        raise ValueError("Missing/invalid 'is_similar' field in JSON response")
+
+    raw_reason = payload.get("reason", payload.get("理由", ""))
+    if raw_reason is None:
+        reason = ""
+    elif isinstance(raw_reason, (str, int, float, bool)):
+        reason = str(raw_reason).strip()
+    else:
+        raise ValueError("Invalid 'reason' field type in JSON response")
+
+    return is_similar, reason
 
 
 async def check_similarity_for_news(db: AsyncSession, news: News, days: int = 7) -> None:
@@ -91,12 +154,38 @@ async def check_similarity_for_news(db: AsyncSession, news: News, days: int = 7)
                 candidate.title_zh or candidate.title,
                 candidate.summary_zh or candidate.summary or "",
             )
-            llm_result = await chat_completion(db, "similarity", messages)
-            if "是" in llm_result.split("\n")[0]:
-                news.is_similar = True
-                news.similar_to_id = candidate.id
-                news.similarity_details = details
-                return
+            current_messages = messages
+
+            for attempt in range(1, MAX_PARSE_ATTEMPTS + 1):
+                llm_result = await chat_completion(db, "similarity", current_messages)
+                try:
+                    is_similar, reason = _parse_similarity_json(llm_result)
+                    if is_similar:
+                        news.is_similar = True
+                        news.similar_to_id = candidate.id
+                        news.similarity_details = {**details, "llm_reason": reason}
+                        return
+                    break
+                except ValueError as exc:
+                    logger.warning(
+                        "Failed to parse similarity JSON (attempt %s/%s): %s",
+                        attempt,
+                        MAX_PARSE_ATTEMPTS,
+                        exc,
+                    )
+                    if attempt == MAX_PARSE_ATTEMPTS:
+                        break
+
+                    current_messages = current_messages + [
+                        {"role": "assistant", "content": llm_result},
+                        {
+                            "role": "user",
+                            "content": (
+                                "你的输出不是合法 JSON。请仅返回一个 JSON 对象，且不要输出任何额外文本："
+                                '{"is_similar": true/false, "reason": "简短说明"}'
+                            ),
+                        },
+                    ]
         except Exception as e:
             logger.warning(f"LLM similarity check failed: {e}")
 

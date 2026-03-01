@@ -1,0 +1,3 @@
+title,summary,category,is_important,reason
+Apache Struts 远程代码执行漏洞预警,CVE利用已出现公开POC,重大漏洞风险提示,true,漏洞影响范围广且已有在野利用
+厂商发布例行版本更新,,其他,false,常规更新信息

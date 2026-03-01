@@ -1,9 +1,16 @@
 import asyncio
+import sys
+from pathlib import Path
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
+
+# Ensure /app (project root) is importable when alembic is executed via entrypoints.
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.config import settings
 from app.models import Base  # noqa: F401 — ensure all models are imported
