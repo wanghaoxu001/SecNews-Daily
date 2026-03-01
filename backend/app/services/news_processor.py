@@ -1,4 +1,5 @@
 import logging
+import time
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,8 +14,23 @@ from app.services.classifier import classify_news
 logger = logging.getLogger(__name__)
 
 
+def _progress(message: str, *, duration_ms: int | None = None, result: str | None = None) -> dict:
+    p = {"message": message}
+    if duration_ms is not None:
+        p["duration_ms"] = duration_ms
+    if result is not None:
+        p["result"] = result
+    return p
+
+
+def _truncate(text: str, max_len: int = 80) -> str:
+    if len(text) <= max_len:
+        return text
+    return text[:max_len] + "..."
+
+
 async def process_single_news_gen(db: AsyncSession, news: News):
-    """Process a single pending news item as async generator, yielding progress messages."""
+    """Process a single pending news item as async generator, yielding progress dicts."""
     try:
         news.process_status = ProcessStatus.processing.value
 
@@ -24,48 +40,62 @@ async def process_single_news_gen(db: AsyncSession, news: News):
                 # Path A: has summary → translate it
                 if is_chinese(news.summary):
                     news.summary_zh = news.summary
-                    yield "摘要已为中文，跳过翻译"
+                    yield _progress("摘要已为中文，跳过翻译")
                 else:
-                    yield "正在翻译摘要..."
+                    yield _progress("正在翻译摘要...")
+                    t0 = time.monotonic()
                     news.summary_zh = await translate_text(db, news.summary)
-                    yield "摘要翻译完成"
+                    elapsed = int((time.monotonic() - t0) * 1000)
+                    yield _progress("摘要翻译完成", duration_ms=elapsed, result=_truncate(news.summary_zh))
             else:
                 # Path B: no summary → crawl content and generate
                 if not news.content:
-                    yield "正在抓取文章正文..."
+                    yield _progress("正在抓取文章正文...")
+                    t0 = time.monotonic()
                     news.content = await crawl_article_content(news.url)
+                    elapsed = int((time.monotonic() - t0) * 1000)
+                    if news.content:
+                        yield _progress("正文抓取完成", duration_ms=elapsed)
+                    else:
+                        yield _progress("正文抓取完成（无内容）", duration_ms=elapsed)
                 if news.content:
-                    yield "正在生成中文摘要..."
+                    yield _progress("正在生成中文摘要...")
+                    t0 = time.monotonic()
                     news.summary_zh = await generate_summary(db, news.content)
-                    yield "摘要生成完成"
+                    elapsed = int((time.monotonic() - t0) * 1000)
+                    yield _progress("摘要生成完成", duration_ms=elapsed, result=_truncate(news.summary_zh))
                 else:
                     news.summary_zh = ""
                     logger.warning(f"No content available for news {news.id}")
-                    yield "无法获取正文内容，摘要置空"
+                    yield _progress("无法获取正文内容，摘要置空")
         else:
-            yield "已有中文摘要，跳过"
+            yield _progress("已有中文摘要，跳过")
 
         # Step 2: Translate title
         if not news.title_zh:
             if is_chinese(news.title):
                 news.title_zh = news.title
-                yield "标题已为中文，跳过翻译"
+                yield _progress("标题已为中文，跳过翻译")
             else:
-                yield "正在翻译标题..."
+                yield _progress("正在翻译标题...")
+                t0 = time.monotonic()
                 news.title_zh = await translate_text(db, news.title)
-                yield "标题翻译完成"
+                elapsed = int((time.monotonic() - t0) * 1000)
+                yield _progress("标题翻译完成", duration_ms=elapsed, result=news.title_zh)
         else:
-            yield "已有中文标题，跳过"
+            yield _progress("已有中文标题，跳过")
 
         # Step 3: Classify
         if not news.category:
-            yield "正在分类..."
+            yield _progress("正在分类...")
+            t0 = time.monotonic()
             title_for_classify = news.title_zh or news.title
             summary_for_classify = news.summary_zh or news.summary or ""
             news.category = await classify_news(db, title_for_classify, summary_for_classify)
-            yield f"分类完成: {news.category}"
+            elapsed = int((time.monotonic() - t0) * 1000)
+            yield _progress(f"分类完成: {news.category}", duration_ms=elapsed)
         else:
-            yield f"已有分类: {news.category}，跳过"
+            yield _progress(f"已有分类: {news.category}，跳过")
 
         news.process_status = ProcessStatus.processed.value
         news.process_error = None
@@ -76,7 +106,7 @@ async def process_single_news_gen(db: AsyncSession, news: News):
         news.process_status = ProcessStatus.failed.value
         news.process_error = str(e)
         await db.commit()
-        yield f"处理失败: {e}"
+        yield _progress(f"处理失败: {e}")
 
 
 async def process_single_news(db: AsyncSession, news: News) -> None:
