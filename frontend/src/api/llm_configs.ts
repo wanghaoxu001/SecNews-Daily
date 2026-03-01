@@ -1,0 +1,21 @@
+import client from './client'
+import type { LlmConfig } from '../types'
+
+export async function fetchLlmConfigs(): Promise<LlmConfig[]> {
+  const resp = await client.get<LlmConfig[]>('/llm-configs')
+  return resp.data
+}
+
+export async function createLlmConfig(data: Partial<LlmConfig>): Promise<LlmConfig> {
+  const resp = await client.post<LlmConfig>('/llm-configs', data)
+  return resp.data
+}
+
+export async function updateLlmConfig(id: number, data: Partial<LlmConfig>): Promise<LlmConfig> {
+  const resp = await client.put<LlmConfig>(`/llm-configs/${id}`, data)
+  return resp.data
+}
+
+export async function deleteLlmConfig(id: number): Promise<void> {
+  await client.delete(`/llm-configs/${id}`)
+}
