@@ -1,8 +1,8 @@
 <template>
   <AppLayout>
-    <div style="max-width: 1400px; margin: 0 auto;">
-      <h2>系统管理</h2>
-      <n-tabs type="line" v-model:value="activeTab">
+    <section class="page-container page-container--wide">
+      <h2 class="page-title management-title">系统管理</h2>
+      <n-tabs type="line" v-model:value="activeTab" animated>
         <n-tab-pane name="news" tab="新闻管理">
           <NewsManagementTab />
         </n-tab-pane>
@@ -25,7 +25,7 @@
           <ImportanceStrategyTab />
         </n-tab-pane>
       </n-tabs>
-    </div>
+    </section>
   </AppLayout>
 </template>
 
@@ -43,3 +43,9 @@ import ImportanceStrategyTab from '../components/management/ImportanceStrategyTa
 
 const activeTab = ref('news')
 </script>
+
+<style scoped>
+.management-title {
+  margin-bottom: var(--space-4);
+}
+</style>

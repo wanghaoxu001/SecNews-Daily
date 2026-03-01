@@ -1,7 +1,6 @@
 <template>
-  <n-spin :show="loading">
-    <!-- Global default config -->
-    <n-card title="全局默认配置" size="small" style="margin-bottom: 16px;">
+  <n-spin :show="configsQuery.isLoading.value || cooldownQuery.isLoading.value">
+    <n-card title="全局默认配置" size="small" style="margin-bottom: var(--space-4);">
       <n-form v-if="defaultConfig.id" label-placement="left" label-width="100">
         <n-grid :cols="2" :x-gap="16">
           <n-gi>
@@ -35,14 +34,13 @@
             </n-form-item>
           </n-gi>
         </n-grid>
-        <div style="text-align: right;">
-          <n-button type="primary" size="small" :loading="savingDefault" @click="saveDefault">保存全局配置</n-button>
-          <n-button size="small" :loading="testingDefault" @click="testConfig('default')" style="margin-left: 8px;">测试连接</n-button>
+        <div class="actions-row actions-row--end">
+          <n-button type="primary" size="small" :loading="saveDefaultMutation.isPending.value" @click="saveDefault">保存全局配置</n-button>
+          <n-button size="small" :loading="testingDefault" @click="testConfig('default')">测试连接</n-button>
         </div>
       </n-form>
     </n-card>
 
-    <!-- Task-specific configs -->
     <n-card title="任务配置" size="small">
       <template #header-extra>
         <n-text depth="3" style="font-size: 12px;">留空则继承全局默认值</n-text>
@@ -50,8 +48,7 @@
       <n-data-table :columns="columns" :data="taskConfigs" size="small" />
     </n-card>
 
-    <!-- Edit modal for task config -->
-    <n-modal v-model:show="showModal" preset="dialog" :title="`编辑 ${editForm.task_type} 配置`" style="width: 480px;">
+    <n-modal v-model:show="showModal" preset="dialog" :title="`编辑 ${editForm.task_type} 配置`" style="width: min(480px, 92vw);">
       <n-form label-placement="left" label-width="100">
         <n-form-item label="模型">
           <n-input v-model:value="editForm.model" :placeholder="defaultConfig.model || ''" />
@@ -73,21 +70,35 @@
         </n-form-item>
       </n-form>
       <template #action>
-        <n-button @click="showModal = false" style="margin-right: 8px;">取消</n-button>
-        <n-button type="primary" :loading="savingTask" @click="saveTaskConfig">保存</n-button>
+        <n-button @click="showModal = false">取消</n-button>
+        <n-button type="primary" :loading="saveTaskMutation.isPending.value" @click="saveTaskConfig">保存</n-button>
       </template>
     </n-modal>
   </n-spin>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, h, onMounted, reactive } from 'vue'
+import { ref, computed, h, reactive, watch } from 'vue'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import {
-  NButton, NCard, NDataTable, NForm, NFormItem, NGrid, NGi,
-  NInput, NInputNumber, NModal, NSpin, NText, NTag, NSpace,
+  NButton,
+  NCard,
+  NDataTable,
+  NForm,
+  NFormItem,
+  NGrid,
+  NGi,
+  NInput,
+  NInputNumber,
+  NModal,
+  NSpin,
+  NText,
+  NTag,
+  NSpace,
   useMessage,
 } from 'naive-ui'
 import { ensureLlmDefaults, updateLlmConfig, testLlmConfig, getLlmCooldown, setLlmCooldown } from '../../api/llm_configs'
+import { queryKeys } from '../../shared/query/keys'
 import type { LlmConfig } from '../../types'
 
 const TASK_TYPE_LABELS: Record<string, string> = {
@@ -100,16 +111,47 @@ const TASK_TYPE_LABELS: Record<string, string> = {
 }
 
 const message = useMessage()
-const loading = ref(false)
-const savingDefault = ref(false)
-const savingTask = ref(false)
+const queryClient = useQueryClient()
+
 const showModal = ref(false)
 const testingDefault = ref(false)
 const testingTaskType = ref<string | null>(null)
-
 const allConfigs = ref<LlmConfig[]>([])
 const cooldownSeconds = ref<number>(0)
 const defaultConfig = reactive<Partial<LlmConfig>>({})
+const editForm = ref<Partial<LlmConfig>>({})
+
+const configsQuery = useQuery({
+  queryKey: queryKeys.llmConfigs.all,
+  queryFn: ensureLlmDefaults,
+})
+
+const cooldownQuery = useQuery({
+  queryKey: queryKeys.llmConfigs.cooldown,
+  queryFn: getLlmCooldown,
+})
+
+watch(
+  () => configsQuery.data.value,
+  (configs) => {
+    if (!configs) return
+    allConfigs.value = configs
+    const cfg = configs.find(c => c.task_type === 'default')
+    if (cfg) {
+      Object.assign(defaultConfig, cfg)
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => cooldownQuery.data.value,
+  (cooldown) => {
+    if (cooldown == null) return
+    cooldownSeconds.value = cooldown
+  },
+  { immediate: true }
+)
 
 const taskConfigs = computed(() =>
   allConfigs.value
@@ -120,7 +162,48 @@ const taskConfigs = computed(() =>
     })
 )
 
-const editForm = ref<Partial<LlmConfig>>({})
+const saveDefaultMutation = useMutation({
+  mutationFn: async () => {
+    if (!defaultConfig.id) return
+    await updateLlmConfig(defaultConfig.id, {
+      base_url: defaultConfig.base_url,
+      api_key: defaultConfig.api_key,
+      model: defaultConfig.model,
+      temperature: defaultConfig.temperature,
+      max_tokens: defaultConfig.max_tokens,
+    })
+    await setLlmCooldown(cooldownSeconds.value ?? 0)
+  },
+  onSuccess: async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.llmConfigs.all })
+    await queryClient.invalidateQueries({ queryKey: queryKeys.llmConfigs.cooldown })
+    message.success('全局配置已保存')
+  },
+  onError: () => {
+    message.error('保存失败')
+  },
+})
+
+const saveTaskMutation = useMutation({
+  mutationFn: async (payload: Partial<LlmConfig>) => {
+    if (!payload.id) return
+    await updateLlmConfig(payload.id, {
+      model: payload.model || null,
+      temperature: payload.temperature ?? null,
+      max_tokens: payload.max_tokens ?? null,
+      base_url: payload.base_url || null,
+      api_key: payload.api_key || null,
+    })
+  },
+  onSuccess: async () => {
+    showModal.value = false
+    await queryClient.invalidateQueries({ queryKey: queryKeys.llmConfigs.all })
+    message.success('配置已保存')
+  },
+  onError: () => {
+    message.error('保存失败')
+  },
+})
 
 const columns = [
   {
@@ -134,12 +217,35 @@ const columns = [
       ])
     },
   },
-  { title: '模型', key: 'model', ellipsis: { tooltip: true }, render: (row: LlmConfig) => row.model || h(NText, { depth: 3 }, { default: () => '继承全局' }) },
-  { title: 'Temperature', key: 'temperature', width: 110, render: (row: LlmConfig) => row.temperature != null ? String(row.temperature) : h(NText, { depth: 3 }, { default: () => '继承全局' }) },
-  { title: 'Max Tokens', key: 'max_tokens', width: 110, render: (row: LlmConfig) => row.max_tokens != null ? String(row.max_tokens) : h(NText, { depth: 3 }, { default: () => '继承全局' }) },
-  { title: 'Base URL', key: 'base_url', width: 120, ellipsis: { tooltip: true }, render: (row: LlmConfig) => row.base_url || h(NText, { depth: 3 }, { default: () => '继承全局' }) },
   {
-    title: '操作', key: 'actions', width: 140,
+    title: '模型',
+    key: 'model',
+    ellipsis: { tooltip: true },
+    render: (row: LlmConfig) => row.model || h(NText, { depth: 3 }, { default: () => '继承全局' }),
+  },
+  {
+    title: 'Temperature',
+    key: 'temperature',
+    width: 110,
+    render: (row: LlmConfig) => row.temperature != null ? String(row.temperature) : h(NText, { depth: 3 }, { default: () => '继承全局' }),
+  },
+  {
+    title: 'Max Tokens',
+    key: 'max_tokens',
+    width: 110,
+    render: (row: LlmConfig) => row.max_tokens != null ? String(row.max_tokens) : h(NText, { depth: 3 }, { default: () => '继承全局' }),
+  },
+  {
+    title: 'Base URL',
+    key: 'base_url',
+    width: 120,
+    ellipsis: { tooltip: true },
+    render: (row: LlmConfig) => row.base_url || h(NText, { depth: 3 }, { default: () => '继承全局' }),
+  },
+  {
+    title: '操作',
+    key: 'actions',
+    width: 140,
     render(row: LlmConfig) {
       return h(NSpace, { size: 4 }, {
         default: () => [
@@ -155,39 +261,8 @@ const columns = [
   },
 ]
 
-async function loadData() {
-  loading.value = true
-  try {
-    allConfigs.value = await ensureLlmDefaults()
-    const cfg = allConfigs.value.find(c => c.task_type === 'default')
-    if (cfg) {
-      Object.assign(defaultConfig, cfg)
-    }
-    cooldownSeconds.value = await getLlmCooldown()
-  } finally {
-    loading.value = false
-  }
-}
-
 async function saveDefault() {
-  if (!defaultConfig.id) return
-  savingDefault.value = true
-  try {
-    await updateLlmConfig(defaultConfig.id, {
-      base_url: defaultConfig.base_url,
-      api_key: defaultConfig.api_key,
-      model: defaultConfig.model,
-      temperature: defaultConfig.temperature,
-      max_tokens: defaultConfig.max_tokens,
-    })
-    await setLlmCooldown(cooldownSeconds.value ?? 0)
-    await loadData()
-    message.success('全局配置已保存')
-  } catch {
-    message.error('保存失败')
-  } finally {
-    savingDefault.value = false
-  }
+  await saveDefaultMutation.mutateAsync()
 }
 
 function openEdit(row: LlmConfig) {
@@ -196,24 +271,7 @@ function openEdit(row: LlmConfig) {
 }
 
 async function saveTaskConfig() {
-  if (!editForm.value.id) return
-  savingTask.value = true
-  try {
-    await updateLlmConfig(editForm.value.id, {
-      model: editForm.value.model || null,
-      temperature: editForm.value.temperature ?? null,
-      max_tokens: editForm.value.max_tokens ?? null,
-      base_url: editForm.value.base_url || null,
-      api_key: editForm.value.api_key || null,
-    })
-    showModal.value = false
-    await loadData()
-    message.success('配置已保存')
-  } catch {
-    message.error('保存失败')
-  } finally {
-    savingTask.value = false
-  }
+  await saveTaskMutation.mutateAsync(editForm.value)
 }
 
 async function testConfig(taskType: string) {
@@ -222,6 +280,7 @@ async function testConfig(taskType: string) {
   } else {
     testingTaskType.value = taskType
   }
+
   try {
     const result = await testLlmConfig(taskType)
     if (result.success) {
@@ -236,6 +295,4 @@ async function testConfig(taskType: string) {
     testingTaskType.value = null
   }
 }
-
-onMounted(loadData)
 </script>

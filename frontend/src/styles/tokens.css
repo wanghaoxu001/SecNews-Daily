@@ -1,0 +1,31 @@
+:root {
+  --color-bg: #f5f7fb;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f1f5f9;
+  --color-border: #dbe3ef;
+  --color-text: #0f172a;
+  --color-text-muted: #64748b;
+  --color-primary: #1664c0;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  --radius-s: 8px;
+  --radius-m: 12px;
+  --radius-l: 16px;
+
+  --header-height: 60px;
+  --mobile-bottom-safe: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  --content-max-width: 980px;
+  --content-max-width-wide: 1400px;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --header-height: 56px;
+  }
+}

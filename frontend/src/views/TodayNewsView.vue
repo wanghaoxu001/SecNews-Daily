@@ -1,22 +1,23 @@
 <template>
   <AppLayout>
     <ScrollProgressBar :progress="progress" />
-    <div style="max-width: 900px; margin: 0 auto;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h2 style="margin: 0;">今日新闻</h2>
+
+    <section class="page-container">
+      <div class="page-header">
+        <h2 class="page-title">今日新闻</h2>
         <n-space>
-          <n-button size="small" @click="handleRefresh" :loading="refreshing">刷新</n-button>
+          <n-button size="small" :loading="newsQuery.isFetching.value" @click="handleRefresh">刷新</n-button>
         </n-space>
       </div>
 
       <NewsFilter @change="handleFilterChange" />
 
-      <n-spin :show="newsStore.loading">
-        <div v-if="newsStore.newsList.length === 0 && !newsStore.loading" style="text-align: center; padding: 60px; color: #999;">
+      <n-spin :show="newsQuery.isFetching.value">
+        <div v-if="newsList.length === 0 && !newsQuery.isFetching.value" class="empty-state">
           暂无新闻
         </div>
         <NewsCard
-          v-for="item in newsStore.newsList"
+          v-for="item in newsList"
           :key="item.id"
           :news="item"
           :selected="selection.isSelected(item.id)"
@@ -25,14 +26,13 @@
         />
       </n-spin>
 
-      <div v-if="newsStore.total > newsStore.pageSize" style="display: flex; justify-content: center; margin-top: 16px;">
+      <div v-if="total > pageSize" class="today-news__pagination actions-row">
         <n-pagination
-          v-model:page="newsStore.page"
-          :page-count="Math.ceil(newsStore.total / newsStore.pageSize)"
-          @update:page="newsStore.loadNews()"
+          v-model:page="page"
+          :page-count="Math.ceil(total / pageSize)"
         />
       </div>
-    </div>
+    </section>
 
     <NewsDetailDrawer
       :visible="drawerVisible"
@@ -40,16 +40,14 @@
       @update:visible="drawerVisible = $event"
     />
 
-    <GenerateBriefingBar
-      :count="selection.getSelectedIds().length"
-      @generate="handleGenerate"
-    />
+    <GenerateBriefingBar :count="selectedCount" @generate="handleGenerate" />
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/vue-query'
 import { NSpin, NPagination, NButton, NSpace, useMessage } from 'naive-ui'
 import AppLayout from '../components/layout/AppLayout.vue'
 import NewsCard from '../components/news/NewsCard.vue'
@@ -57,48 +55,73 @@ import NewsFilter from '../components/news/NewsFilter.vue'
 import NewsDetailDrawer from '../components/news/NewsDetailDrawer.vue'
 import ScrollProgressBar from '../components/news/ScrollProgressBar.vue'
 import GenerateBriefingBar from '../components/news/GenerateBriefingBar.vue'
-import { useNewsStore } from '../stores/news'
 import { useNewsSelection } from '../composables/useNewsSelection'
 import { useScrollProgress } from '../composables/useScrollProgress'
 import { createBriefing } from '../api/briefings'
+import { fetchNews } from '../api/news'
 import { todayInChina } from '../utils/date'
+import { queryKeys } from '../shared/query/keys'
 import type { News } from '../types'
 
 const router = useRouter()
 const message = useMessage()
-const newsStore = useNewsStore()
+const queryClient = useQueryClient()
 const selection = useNewsSelection()
 const { progress } = useScrollProgress()
 
+const page = ref(1)
+const pageSize = 20
+const filters = ref<{ status?: string; category?: string }>({})
+
 const drawerVisible = ref(false)
 const selectedNews = ref<News | null>(null)
-const refreshing = ref(false)
+
+const newsQuery = useQuery({
+  queryKey: computed(() => queryKeys.news.list({
+    page: page.value,
+    page_size: pageSize,
+    ...filters.value,
+  })),
+  queryFn: () => fetchNews({
+    page: page.value,
+    page_size: pageSize,
+    ...filters.value,
+  }),
+  placeholderData: keepPreviousData,
+})
+
+const createBriefingMutation = useMutation({
+  mutationFn: createBriefing,
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.briefings.list })
+  },
+})
+
+const newsList = computed(() => newsQuery.data.value?.items ?? [])
+const total = computed(() => newsQuery.data.value?.total ?? 0)
+const selectedCount = computed(() => selection.selectedIds.value.size)
 
 function openDetail(news: News) {
   selectedNews.value = news
   drawerVisible.value = true
 }
 
-function handleFilterChange(filters: { status?: string; category?: string }) {
-  newsStore.setFilters(filters)
-  newsStore.loadNews()
+function handleFilterChange(nextFilters: { status?: string; category?: string }) {
+  filters.value = nextFilters
+  page.value = 1
 }
 
 async function handleRefresh() {
-  refreshing.value = true
-  try {
-    await newsStore.loadNews()
-  } finally {
-    refreshing.value = false
-  }
+  await newsQuery.refetch()
 }
 
 async function handleGenerate() {
   const ids = selection.getSelectedIds()
   if (ids.length === 0) return
+
   try {
     const today = todayInChina()
-    const briefing = await createBriefing({
+    const briefing = await createBriefingMutation.mutateAsync({
       title: `网安情报快报 ${today}`,
       date: today,
       news_ids: ids,
@@ -110,8 +133,11 @@ async function handleGenerate() {
     message.error('创建快报失败')
   }
 }
-
-onMounted(() => {
-  newsStore.loadNews()
-})
 </script>
+
+<style scoped>
+.today-news__pagination {
+  justify-content: center;
+  margin-top: var(--space-4);
+}
+</style>

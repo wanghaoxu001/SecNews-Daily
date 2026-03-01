@@ -1,11 +1,11 @@
 <template>
-  <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;">
+  <div class="news-filter">
     <n-select
       v-model:value="localCategory"
       placeholder="分类筛选"
       clearable
       :options="categoryOptions"
-      style="width: 200px;"
+      class="news-filter__field"
       @update:value="emitChange"
     />
     <n-select
@@ -13,7 +13,7 @@
       placeholder="状态筛选"
       clearable
       :options="statusOptions"
-      style="width: 160px;"
+      class="news-filter__field"
       @update:value="emitChange"
     />
   </div>
@@ -41,3 +41,22 @@ function emitChange() {
   })
 }
 </script>
+
+<style scoped>
+.news-filter {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.news-filter__field {
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .news-filter {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
