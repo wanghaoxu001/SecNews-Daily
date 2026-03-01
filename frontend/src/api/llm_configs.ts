@@ -6,6 +6,11 @@ export async function fetchLlmConfigs(): Promise<LlmConfig[]> {
   return resp.data
 }
 
+export async function ensureLlmDefaults(): Promise<LlmConfig[]> {
+  const resp = await client.post<LlmConfig[]>('/llm-configs/ensure-defaults')
+  return resp.data
+}
+
 export async function createLlmConfig(data: Partial<LlmConfig>): Promise<LlmConfig> {
   const resp = await client.post<LlmConfig>('/llm-configs', data)
   return resp.data

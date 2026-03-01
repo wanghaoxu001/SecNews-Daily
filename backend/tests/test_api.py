@@ -85,8 +85,19 @@ async def test_llm_config_crud(client, auth_headers):
     assert resp.status_code == 200
     assert resp.json()["model"] == "gpt-4o"
 
+    # Built-in task types cannot be deleted
     resp = await client.delete(f"/api/v1/llm-configs/{config_id}", headers=auth_headers)
-    assert resp.status_code == 204
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_llm_config_ensure_defaults(client, auth_headers):
+    resp = await client.post("/api/v1/llm-configs/ensure-defaults", headers=auth_headers)
+    assert resp.status_code == 200
+    configs = resp.json()
+    task_types = {c["task_type"] for c in configs}
+    for tt in ["default", "translate", "summarize", "classify", "similarity", "importance", "embedding"]:
+        assert tt in task_types
 
 
 # ---- Task Configs CRUD ----

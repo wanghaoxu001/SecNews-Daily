@@ -2,8 +2,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import CRUDBase
+from app.models.enums import LlmTaskType
 from app.models.llm_config import LlmConfig
 from app.schemas.llm_config import LlmConfigCreate, LlmConfigUpdate
+
+ALL_TASK_TYPES = [t.value for t in LlmTaskType]
 
 
 class CRUDLlmConfig(CRUDBase[LlmConfig, LlmConfigCreate, LlmConfigUpdate]):
@@ -29,6 +32,17 @@ class CRUDLlmConfig(CRUDBase[LlmConfig, LlmConfigCreate, LlmConfigUpdate]):
             "updated_at": cfg.updated_at,
         }
         return result
+
+    async def ensure_all_task_types(self, db: AsyncSession) -> list[LlmConfig]:
+        """Ensure a row exists for every LlmTaskType. Returns all configs."""
+        result = await db.execute(select(LlmConfig))
+        existing = {cfg.task_type for cfg in result.scalars().all()}
+        for tt in ALL_TASK_TYPES:
+            if tt not in existing:
+                db.add(LlmConfig(task_type=tt))
+        await db.commit()
+        result = await db.execute(select(LlmConfig).order_by(LlmConfig.id))
+        return list(result.scalars().all())
 
 
 crud_llm_config = CRUDLlmConfig(LlmConfig)
