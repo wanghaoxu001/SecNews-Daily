@@ -22,9 +22,10 @@ TOP_K = 3
 
 async def check_similarity_for_news(db: AsyncSession, news: News, days: int = 7) -> None:
     """Check if news is similar to recently published briefing news."""
-    from datetime import datetime, timedelta
+    from datetime import timedelta
+    from app.core.timezone import now_utc
 
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = now_utc() - timedelta(days=days)
 
     # Get candidate pool: recent completed news in same category
     result = await db.execute(

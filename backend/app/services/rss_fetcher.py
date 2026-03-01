@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import feedparser
 from sqlalchemy import select
@@ -20,7 +20,7 @@ def _parse_feed(url: str) -> list[dict]:
     for entry in feed.entries:
         published = None
         if hasattr(entry, "published_parsed") and entry.published_parsed:
-            published = datetime(*entry.published_parsed[:6])
+            published = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
         entries.append({
             "title": entry.get("title", ""),
             "url": entry.get("link", ""),

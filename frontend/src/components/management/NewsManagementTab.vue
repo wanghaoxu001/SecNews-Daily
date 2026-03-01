@@ -130,6 +130,7 @@ import {
   NEWS_CATEGORIES, PROCESS_STATUSES,
   STATUS_LABELS, STATUS_COLORS, REPROCESS_TARGETS, CATEGORY_COLORS,
 } from '../../types/enums'
+import { formatDateTime } from '../../utils/date'
 
 const message = useMessage()
 
@@ -252,7 +253,7 @@ const columns: DataTableColumns<News> = [
     width: 160,
     render(row) {
       if (!row.published_at) return '-'
-      return new Date(row.published_at).toLocaleString('zh-CN')
+      return formatDateTime(row.published_at)
     },
   },
   {

@@ -61,6 +61,7 @@ import { useNewsStore } from '../stores/news'
 import { useNewsSelection } from '../composables/useNewsSelection'
 import { useScrollProgress } from '../composables/useScrollProgress'
 import { createBriefing } from '../api/briefings'
+import { todayInChina } from '../utils/date'
 import type { News } from '../types'
 
 const router = useRouter()
@@ -96,7 +97,7 @@ async function handleGenerate() {
   const ids = selection.getSelectedIds()
   if (ids.length === 0) return
   try {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayInChina()
     const briefing = await createBriefing({
       title: `网安情报快报 ${today}`,
       date: today,

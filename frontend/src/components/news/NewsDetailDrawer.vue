@@ -7,7 +7,8 @@
           <n-descriptions-item label="来源">{{ news.source_name || '未知' }}</n-descriptions-item>
           <n-descriptions-item label="分类">{{ news.category || '未分类' }}</n-descriptions-item>
           <n-descriptions-item label="状态">{{ news.process_status }}</n-descriptions-item>
-          <n-descriptions-item label="发布时间">{{ news.published_at || '未知' }}</n-descriptions-item>
+          <n-descriptions-item label="保存时间">{{ formatTime(news.created_at) }}</n-descriptions-item>
+          <n-descriptions-item label="发布时间">{{ formatTime(news.published_at) }}</n-descriptions-item>
           <n-descriptions-item label="重复">{{ news.is_similar ? '是' : '否' }}</n-descriptions-item>
           <n-descriptions-item label="重要">{{ news.is_important === null ? '未判定' : news.is_important ? '是' : '否' }}</n-descriptions-item>
         </n-descriptions>
@@ -30,6 +31,7 @@
 <script setup lang="ts">
 import { NDrawer, NDrawerContent, NDescriptions, NDescriptionsItem, NButton } from 'naive-ui'
 import type { News } from '../../types'
+import { formatDateTime } from '../../utils/date'
 
 defineProps<{
   visible: boolean
@@ -39,4 +41,8 @@ defineProps<{
 defineEmits<{
   'update:visible': [value: boolean]
 }>()
+
+function formatTime(t: string | null): string {
+  return t ? formatDateTime(t) : '未知'
+}
 </script>

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import String, Text, Boolean, Integer, ForeignKey, Index, JSON
+from sqlalchemy import String, Text, Boolean, Integer, ForeignKey, Index, JSON, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
 
@@ -17,7 +17,7 @@ class News(TimestampMixin, Base):
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     author: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    published_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Source
     source_id: Mapped[int | None] = mapped_column(ForeignKey("rss_sources.id"), nullable=True)

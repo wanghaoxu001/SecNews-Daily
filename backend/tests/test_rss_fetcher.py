@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.models.rss_source import RssSource
 from app.models.news import News
@@ -30,8 +30,8 @@ async def test_fetch_rss_creates_news(db_session):
     ]
 
     with patch("app.services.rss_fetcher._parse_feed", return_value=[
-        {"title": "Article 1", "url": "https://example.com/1", "summary": "Summary 1", "author": "", "published_at": datetime(2025, 1, 15)},
-        {"title": "Article 2", "url": "https://example.com/2", "summary": "Summary 2", "author": "", "published_at": datetime(2025, 1, 15)},
+        {"title": "Article 1", "url": "https://example.com/1", "summary": "Summary 1", "author": "", "published_at": datetime(2025, 1, 15, tzinfo=timezone.utc)},
+        {"title": "Article 2", "url": "https://example.com/2", "summary": "Summary 2", "author": "", "published_at": datetime(2025, 1, 15, tzinfo=timezone.utc)},
     ]):
         result = await fetch_all_sources(db_session)
 

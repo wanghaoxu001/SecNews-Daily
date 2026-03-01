@@ -17,7 +17,7 @@
     <template #footer>
       <div style="display: flex; justify-content: space-between; color: #999; font-size: 12px;">
         <span>{{ news.source_name || '未知来源' }}</span>
-        <span>{{ formatTime(news.published_at) }}</span>
+        <span>{{ formatTime(news.created_at) }}</span>
       </div>
     </template>
   </n-card>
@@ -28,6 +28,7 @@ import { computed } from 'vue'
 import { NCard, NCheckbox, NTag } from 'naive-ui'
 import type { News } from '../../types'
 import { CATEGORY_COLORS } from '../../types/enums'
+import { formatDate } from '../../utils/date'
 
 const props = defineProps<{
   news: News
@@ -42,7 +43,6 @@ defineEmits<{
 const categoryColor = computed(() => CATEGORY_COLORS[props.news.category || ''] || '#8c8c8c')
 
 function formatTime(t: string | null): string {
-  if (!t) return ''
-  return new Date(t).toLocaleDateString('zh-CN')
+  return formatDate(t)
 }
 </script>

@@ -1,7 +1,8 @@
 import { ref, watch } from 'vue'
+import { todayInChina } from '../utils/date'
 
 export function useNewsSelection() {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayInChina()
   const storageKey = `news_selection_${today}`
 
   const selectedIds = ref<Set<number>>(new Set(

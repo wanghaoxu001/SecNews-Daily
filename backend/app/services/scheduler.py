@@ -13,7 +13,7 @@ from app.services.importance_judge import judge_importance_batch
 
 logger = logging.getLogger(__name__)
 
-scheduler = AsyncIOScheduler()
+scheduler = AsyncIOScheduler(timezone="Asia/Shanghai")
 
 TASK_FUNC_MAP = {
     "fetch_rss": fetch_all_sources,
