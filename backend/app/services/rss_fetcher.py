@@ -1,6 +1,9 @@
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
+from html import unescape
+from typing import Any
 
 import feedparser
 from sqlalchemy import select
@@ -13,18 +16,65 @@ from app.models.enums import ProcessStatus
 logger = logging.getLogger(__name__)
 
 
+TAG_RE = re.compile(r"<[^>]+>")
+WHITESPACE_RE = re.compile(r"\s+")
+
+
+def _clean_html_like_text(text: str | None) -> str:
+    if not text:
+        return ""
+    cleaned = unescape(text)
+    cleaned = TAG_RE.sub(" ", cleaned)
+    cleaned = WHITESPACE_RE.sub(" ", cleaned).strip()
+    return cleaned
+
+
+def _extract_summary(entry: Any) -> str:
+    summary = entry.get("summary", "") or entry.get("description", "")
+    return _clean_html_like_text(summary)
+
+
+def _extract_content(entry: Any) -> str:
+    """Extract full-content fields from RSS/Atom entry."""
+    values: list[str] = []
+
+    content_items = entry.get("content", [])
+    if isinstance(content_items, dict):
+        content_items = [content_items]
+
+    if isinstance(content_items, list):
+        for item in content_items:
+            if isinstance(item, dict):
+                value = item.get("value")
+            else:
+                value = getattr(item, "value", None)
+            if value:
+                values.append(value)
+
+    # Fallback for some feeds exposing content via namespaced keys
+    fallback_value = entry.get("content:encoded", "") or entry.get("content_encoded", "")
+    if fallback_value:
+        values.append(fallback_value)
+
+    cleaned_values = [_clean_html_like_text(v) for v in values if v]
+    cleaned_values = [v for v in cleaned_values if v]
+    return "\n\n".join(cleaned_values)
+
+
 def _parse_feed(url: str) -> list[dict]:
     """Parse RSS feed (blocking, run in executor)."""
     feed = feedparser.parse(url)
     entries = []
     for entry in feed.entries:
         published = None
-        if hasattr(entry, "published_parsed") and entry.published_parsed:
-            published = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+        published_parsed = entry.get("published_parsed") or entry.get("updated_parsed")
+        if published_parsed:
+            published = datetime(*published_parsed[:6], tzinfo=timezone.utc)
         entries.append({
             "title": entry.get("title", ""),
             "url": entry.get("link", ""),
-            "summary": entry.get("summary", ""),
+            "summary": _extract_summary(entry),
+            "content": _extract_content(entry),
             "author": entry.get("author", ""),
             "published_at": published,
         })
@@ -52,9 +102,10 @@ async def fetch_single_source(db: AsyncSession, source: RssSource) -> int:
         news = News(
             title=entry["title"],
             url=entry["url"],
-            summary=entry["summary"] or None,
-            author=entry["author"] or None,
-            published_at=entry["published_at"],
+            summary=entry.get("summary") or None,
+            content=entry.get("content") or None,
+            author=entry.get("author") or None,
+            published_at=entry.get("published_at"),
             source_id=source.id,
             source_name=source.name,
             process_status=ProcessStatus.pending.value,

@@ -5,6 +5,9 @@ from app.models.news import News
 from app.models.enums import ProcessStatus
 from app.services.news_processor import process_single_news, process_pending_news
 
+LONG_CONTENT = "This is a detailed incident report with technical indicators. " * 8
+LONG_ZH_SUMMARY = "这是一段用于测试的较长中文摘要，覆盖事件背景、攻击路径、影响范围和处置建议，能够满足最小摘要长度要求。" * 2
+
 
 @pytest.mark.asyncio
 async def test_process_news_path_a_with_summary(db_session):
@@ -19,14 +22,16 @@ async def test_process_news_path_a_with_summary(db_session):
     await db_session.commit()
     await db_session.refresh(news)
 
-    with patch("app.services.news_processor.translate_text", new_callable=AsyncMock, return_value="Apache HTTP Server 发现严重远程代码执行漏洞"), \
+    with patch("app.services.news_processor.crawl_article_content", new_callable=AsyncMock) as mock_crawl, \
+         patch("app.services.news_processor.translate_text", new_callable=AsyncMock, return_value=LONG_ZH_SUMMARY), \
          patch("app.services.news_processor.classify_news", new_callable=AsyncMock, return_value="重大漏洞风险提示"):
         await process_single_news(db_session, news)
 
     assert news.process_status == ProcessStatus.processed.value
-    assert news.summary_zh is not None
+    assert news.summary_zh == LONG_ZH_SUMMARY
     assert news.title_zh is not None
     assert news.category == "重大漏洞风险提示"
+    mock_crawl.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -42,7 +47,7 @@ async def test_process_news_path_b_no_summary(db_session):
     await db_session.commit()
     await db_session.refresh(news)
 
-    with patch("app.services.news_processor.crawl_article_content", new_callable=AsyncMock, return_value="Full article text about the data breach..."), \
+    with patch("app.services.news_processor.crawl_article_content", new_callable=AsyncMock, return_value=LONG_CONTENT), \
          patch("app.services.news_processor.generate_summary", new_callable=AsyncMock, return_value="X公司发生重大数据泄露事件"), \
          patch("app.services.news_processor.translate_text", new_callable=AsyncMock, return_value="X公司数据泄露"), \
          patch("app.services.news_processor.classify_news", new_callable=AsyncMock, return_value="重大数据泄露事件"):
@@ -54,6 +59,101 @@ async def test_process_news_path_b_no_summary(db_session):
 
 
 @pytest.mark.asyncio
+async def test_process_news_prefers_rss_content_without_crawl(db_session):
+    news = News(
+        title="Supply Chain Compromise",
+        url="https://example.com/supply-chain",
+        summary="Short summary from RSS",
+        content=LONG_CONTENT,
+        process_status=ProcessStatus.pending.value,
+    )
+    db_session.add(news)
+    await db_session.commit()
+    await db_session.refresh(news)
+
+    with patch("app.services.news_processor.crawl_article_content", new_callable=AsyncMock) as mock_crawl, \
+         patch("app.services.news_processor.generate_summary", new_callable=AsyncMock, return_value="基于正文生成的摘要"), \
+         patch("app.services.news_processor.translate_text", new_callable=AsyncMock, return_value="不会被调用"), \
+         patch("app.services.news_processor.classify_news", new_callable=AsyncMock, return_value="供应链攻击与投毒事件"):
+        await process_single_news(db_session, news)
+
+    assert news.process_status == ProcessStatus.processed.value
+    assert news.summary_zh == "基于正文生成的摘要"
+    mock_crawl.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_process_news_short_summary_triggers_crawl_and_regenerate(db_session):
+    news = News(
+        title="Weekly Update",
+        url="https://example.com/weekly-update",
+        summary="Vendor released a security update for multiple CVEs.",
+        content="too short",
+        process_status=ProcessStatus.pending.value,
+    )
+    db_session.add(news)
+    await db_session.commit()
+    await db_session.refresh(news)
+
+    with patch("app.services.news_processor.crawl_article_content", new_callable=AsyncMock, return_value=LONG_CONTENT) as mock_crawl, \
+         patch("app.services.news_processor.generate_summary", new_callable=AsyncMock, return_value="抓取正文后生成更完整摘要"), \
+         patch("app.services.news_processor.translate_text", new_callable=AsyncMock, return_value="厂商发布多个 CVE 的安全更新"), \
+         patch("app.services.news_processor.classify_news", new_callable=AsyncMock, return_value="漏洞通告与补丁发布"):
+        await process_single_news(db_session, news)
+
+    assert news.process_status == ProcessStatus.processed.value
+    assert news.summary_zh == "抓取正文后生成更完整摘要"
+    mock_crawl.assert_called_once_with("https://example.com/weekly-update")
+
+
+@pytest.mark.asyncio
+async def test_process_news_short_summary_kept_when_crawl_fails(db_session):
+    news = News(
+        title="Weekly Update",
+        url="https://example.com/weekly-update",
+        summary="Vendor released a security update for multiple CVEs.",
+        content="too short",
+        process_status=ProcessStatus.pending.value,
+    )
+    db_session.add(news)
+    await db_session.commit()
+    await db_session.refresh(news)
+
+    with patch("app.services.news_processor.crawl_article_content", new_callable=AsyncMock, return_value=None) as mock_crawl, \
+         patch("app.services.news_processor.translate_text", new_callable=AsyncMock, return_value="厂商发布多个 CVE 的安全更新"), \
+         patch("app.services.news_processor.classify_news", new_callable=AsyncMock, return_value="漏洞通告与补丁发布"):
+        await process_single_news(db_session, news)
+
+    assert news.process_status == ProcessStatus.processed.value
+    assert news.summary_zh == "厂商发布多个 CVE 的安全更新"
+    mock_crawl.assert_called_once_with("https://example.com/weekly-update")
+
+
+@pytest.mark.asyncio
+async def test_process_news_short_rss_content_without_summary_triggers_crawl(db_session):
+    news = News(
+        title="Incident Timeline",
+        url="https://example.com/incident-timeline",
+        summary=None,
+        content="short",
+        process_status=ProcessStatus.pending.value,
+    )
+    db_session.add(news)
+    await db_session.commit()
+    await db_session.refresh(news)
+
+    with patch("app.services.news_processor.crawl_article_content", new_callable=AsyncMock, return_value=LONG_CONTENT) as mock_crawl, \
+         patch("app.services.news_processor.generate_summary", new_callable=AsyncMock, return_value="抓取正文后生成摘要"), \
+         patch("app.services.news_processor.translate_text", new_callable=AsyncMock, return_value="不会被调用"), \
+         patch("app.services.news_processor.classify_news", new_callable=AsyncMock, return_value="网络攻击与入侵事件"):
+        await process_single_news(db_session, news)
+
+    assert news.process_status == ProcessStatus.processed.value
+    assert news.summary_zh == "抓取正文后生成摘要"
+    mock_crawl.assert_called_once_with("https://example.com/incident-timeline")
+
+
+@pytest.mark.asyncio
 async def test_process_news_idempotent(db_session):
     """Already-filled fields should not be re-processed."""
     news = News(
@@ -61,7 +161,7 @@ async def test_process_news_idempotent(db_session):
         url="https://example.com/already-processed",
         summary="Some summary",
         title_zh="已处理标题",
-        summary_zh="已有的中文摘要",
+        summary_zh=LONG_ZH_SUMMARY,
         category="其他",
         process_status=ProcessStatus.pending.value,
     )

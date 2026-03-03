@@ -138,7 +138,7 @@ function colorToSoftBg(color: string): string {
   font-size: 16px;
   line-height: 1.5;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
