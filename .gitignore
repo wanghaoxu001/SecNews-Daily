@@ -210,3 +210,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# OS / local artifacts
+.DS_Store
+
+# Frontend build / test artifacts
+frontend/tsconfig.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/
+
+# Local screenshot files
+截屏*.png
+Screenshot*.png
