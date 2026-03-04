@@ -22,6 +22,12 @@ class RssSourceUpdate(BaseModel):
 
 class RssSourceResponse(RssSourceBase):
     id: int
+    domain: str | None = None
+    probe_status: str | None = None
+    probe_last_run_at: datetime | None = None
+    probe_last_error: str | None = None
+    effective_wait_for_chain: list[str] | None = None
+    effective_timeouts_ms: list[int] | None = None
     created_at: datetime
     updated_at: datetime
 

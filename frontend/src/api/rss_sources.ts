@@ -20,6 +20,26 @@ export async function deleteRssSource(id: number): Promise<void> {
   await client.delete(`/rss-sources/${id}`)
 }
 
+export interface CrawlPolicyResponse {
+  domain: string
+  probe_status: string
+  probe_last_error: string | null
+  probe_last_run_at: string | null
+  probe_sample_size: number | null
+  probe_success_rate: number | null
+  probe_avg_duration_ms: number | null
+  wait_for_chain: string[] | null
+  timeouts_ms: number[] | null
+  effective_wait_for_chain: string[]
+  effective_timeouts_ms: number[]
+  effective_source: string
+}
+
+export async function probeSourceCrawlPolicy(sourceId: number): Promise<CrawlPolicyResponse> {
+  const resp = await client.post<CrawlPolicyResponse>(`/rss-sources/${sourceId}/probe-crawl-policy`)
+  return resp.data
+}
+
 export interface PipelineEvent {
   step: 'fetch' | 'process' | 'similarity' | 'importance' | 'done'
   status: 'running' | 'success' | 'error' | 'info'

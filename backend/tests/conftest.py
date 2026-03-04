@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 
 from app.models.base import Base
 from app.database import get_db
+from app.config import settings
 
 # Patch scheduler before importing app
 with patch("app.services.scheduler.start_scheduler", new_callable=AsyncMock), \
@@ -56,3 +57,9 @@ async def auth_headers(client):
     resp = await client.post("/api/v1/auth/login", json={"username": "admin", "password": "admin123"})
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture(autouse=True)
+def disable_auto_probe(monkeypatch):
+    monkeypatch.setattr(settings, "CRAWL_POLICY_PROBE_ENABLED", False)
+    monkeypatch.setattr(settings, "CRAWL_POLICY_PROBE_TRIGGER_ON_CREATE", False)

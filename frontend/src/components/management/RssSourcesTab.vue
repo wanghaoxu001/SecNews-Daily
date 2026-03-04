@@ -52,11 +52,19 @@ import {
   NSpin,
   useMessage,
 } from 'naive-ui'
-import { fetchRssSources, createRssSource, updateRssSource, deleteRssSource, runSourcePipeline } from '../../api/rss_sources'
+import {
+  fetchRssSources,
+  createRssSource,
+  updateRssSource,
+  deleteRssSource,
+  runSourcePipeline,
+  probeSourceCrawlPolicy,
+} from '../../api/rss_sources'
 import type { PipelineEvent } from '../../api/rss_sources'
 import { queryKeys } from '../../shared/query/keys'
 import { useResponsive } from '../../composables/useResponsive'
 import type { RssSource } from '../../types'
+import { formatDateTime } from '../../utils/date'
 
 const message = useMessage()
 const queryClient = useQueryClient()
@@ -69,6 +77,7 @@ const showRunDrawer = ref(false)
 const runSourceName = ref('')
 const runLogs = ref<PipelineEvent[]>([])
 const running = ref(false)
+const probingSourceId = ref<number | null>(null)
 const logContainerRef = ref<HTMLElement | null>(null)
 
 const drawerWidth = computed(() => (isMobile.value ? '100vw' : 520))
@@ -145,8 +154,54 @@ async function handleRun(row: RssSource) {
   }
 }
 
+function probeStatusLabel(status: string | null): string {
+  if (status === 'success') return '已完成'
+  if (status === 'running') return '探测中'
+  if (status === 'failed') return '失败'
+  if (status === 'pending') return '待探测'
+  return '未知'
+}
+
+function probeStatusType(status: string | null): 'success' | 'info' | 'error' | 'warning' | 'default' {
+  if (status === 'success') return 'success'
+  if (status === 'running') return 'info'
+  if (status === 'failed') return 'error'
+  if (status === 'pending') return 'warning'
+  return 'default'
+}
+
+function formatTime(value: string | null): string {
+  return value ? formatDateTime(value) : '-'
+}
+
+function resolvePolicyAttempts(row: RssSource): Array<{ waitFor: string; timeoutMs: number }> {
+  const timeouts = row.effective_timeouts_ms ?? []
+  const waits = row.effective_wait_for_chain ?? []
+  const fallbackWait = waits[waits.length - 1] ?? '-'
+
+  return timeouts.map((timeoutMs, index) => ({
+    waitFor: waits[index] ?? fallbackWait,
+    timeoutMs,
+  }))
+}
+
+async function handleProbe(row: RssSource) {
+  if (probingSourceId.value != null) return
+  probingSourceId.value = row.id
+  try {
+    await probeSourceCrawlPolicy(row.id)
+    await queryClient.invalidateQueries({ queryKey: queryKeys.rssSources.list })
+    message.success('探测完成')
+  } catch (e: any) {
+    message.error(`探测失败: ${e?.message || 'unknown error'}`)
+  } finally {
+    probingSourceId.value = null
+  }
+}
+
 const columns = [
   { title: '名称', key: 'name', width: 150 },
+  { title: '域名', key: 'domain', width: 170, render: (row: RssSource) => row.domain || '-' },
   { title: 'URL', key: 'url', ellipsis: { tooltip: true } },
   {
     title: '状态',
@@ -157,9 +212,53 @@ const columns = [
     },
   },
   {
+    title: '探测状态',
+    key: 'probe_status',
+    width: 110,
+    render(row: RssSource) {
+      return h(
+        NTag,
+        { type: probeStatusType(row.probe_status), size: 'small' },
+        { default: () => probeStatusLabel(row.probe_status) }
+      )
+    },
+  },
+  {
+    title: '最近探测',
+    key: 'probe_last_run_at',
+    width: 180,
+    render(row: RssSource) {
+      return formatTime(row.probe_last_run_at)
+    },
+  },
+  {
+    title: '超时配置',
+    key: 'effective_timeouts_ms',
+    width: 420,
+    render(row: RssSource) {
+      const attempts = resolvePolicyAttempts(row)
+      if (attempts.length === 0) return '-'
+      return h(
+        'div',
+        { class: 'policy-attempts' },
+        attempts.map((attempt, index) =>
+          h(
+            NTag,
+            {
+              size: 'small',
+              bordered: false,
+              class: 'policy-tag',
+            },
+            { default: () => `R${index + 1} ${attempt.waitFor} ${attempt.timeoutMs}ms` }
+          )
+        )
+      )
+    },
+  },
+  {
     title: '操作',
     key: 'actions',
-    width: 200,
+    width: 270,
     render(row: RssSource) {
       return h('div', { class: 'table-actions' }, [
         h(
@@ -172,6 +271,18 @@ const columns = [
             onClick: () => handleRun(row),
           },
           { default: () => '抓取' }
+        ),
+        h(
+          NButton,
+          {
+            size: 'tiny',
+            type: 'info',
+            tertiary: true,
+            disabled: probingSourceId.value != null,
+            loading: probingSourceId.value === row.id,
+            onClick: () => handleProbe(row),
+          },
+          { default: () => '重探测' }
         ),
         h(
           NButton,
@@ -212,6 +323,16 @@ async function handleSave() {
 .table-actions {
   display: flex;
   gap: var(--space-2);
+}
+
+.policy-attempts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.policy-tag {
+  background: var(--color-surface-soft);
 }
 
 .rss-run-log {

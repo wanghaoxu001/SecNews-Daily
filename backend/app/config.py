@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     CRAWL_CHECK_ROBOTS: bool = False
     CRAWL_USER_AGENT: str = "SecNewsBot/1.0 (+https://example.com)"
     CRAWL_DOMAIN_OVERRIDES_JSON: str = "{}"
+    CRAWL_POLICY_PROBE_ENABLED: bool = True
+    CRAWL_POLICY_PROBE_TRIGGER_ON_CREATE: bool = True
+    CRAWL_POLICY_PROBE_SAMPLE_SIZE: int = 3
+    CRAWL_POLICY_PROBE_CONCURRENCY: int = 2
+    CRAWL_POLICY_CACHE_TTL_SECONDS: int = 60
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

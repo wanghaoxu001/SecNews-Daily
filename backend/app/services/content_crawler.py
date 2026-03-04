@@ -1,10 +1,14 @@
 import logging
 import json
 import re
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
 import time
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 
@@ -16,6 +20,9 @@ DEFAULT_WAIT_FOR_CHAIN = [
     "css:main, body",
     "css:body",
 ]
+
+_DOMAIN_POLICY_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_DOMAIN_POLICY_CACHE_LOCK = asyncio.Lock()
 
 
 @dataclass
@@ -63,6 +70,25 @@ def format_crawl_result_detail(result: CrawlResult) -> str:
             f"total_duration_ms={result.total_duration_ms} | error_chain={chain}"
         )
     return f"crawl_success | attempts={result.attempts} | total_duration_ms={result.total_duration_ms}"
+
+
+def extract_domain_from_url(url: str) -> str:
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").strip().lower()
+    if host.startswith("www."):
+        return host
+    return host
+
+
+def normalize_domain(domain: str) -> str:
+    return (domain or "").strip().lower()
+
+
+def invalidate_domain_policy_cache(domain: str | None = None) -> None:
+    if domain:
+        _DOMAIN_POLICY_CACHE.pop(normalize_domain(domain), None)
+        return
+    _DOMAIN_POLICY_CACHE.clear()
 
 
 def _normalize_text(text: str | None) -> str:
@@ -221,6 +247,91 @@ def _load_domain_overrides() -> dict[str, dict[str, Any]]:
     return overrides
 
 
+def _policy_row_to_override(policy: Any) -> dict[str, Any]:
+    if policy is None or getattr(policy, "probe_status", None) != "success":
+        return {}
+
+    override: dict[str, Any] = {}
+    wait_for_chain = getattr(policy, "wait_for_chain", None)
+    timeouts_ms = getattr(policy, "timeouts_ms", None)
+    simulate_user = getattr(policy, "simulate_user", None)
+    magic = getattr(policy, "magic", None)
+
+    if isinstance(wait_for_chain, list):
+        override["wait_for"] = wait_for_chain
+    if isinstance(timeouts_ms, list):
+        override["timeouts_ms"] = timeouts_ms
+    if isinstance(simulate_user, bool):
+        override["simulate_user"] = simulate_user
+    if isinstance(magic, bool):
+        override["magic"] = magic
+    return override
+
+
+async def _query_domain_policy(db: AsyncSession, domain: str) -> Any:
+    from app.models.crawl_domain_policy import CrawlDomainPolicy
+
+    result = await db.execute(select(CrawlDomainPolicy).where(CrawlDomainPolicy.domain == domain))
+    return result.scalar_one_or_none()
+
+
+async def _load_db_domain_override(domain: str, db: AsyncSession | None = None) -> dict[str, Any]:
+    if not settings.CRAWL_POLICY_PROBE_ENABLED:
+        return {}
+
+    domain = normalize_domain(domain)
+    if not domain:
+        return {}
+
+    ttl = _to_positive_int(settings.CRAWL_POLICY_CACHE_TTL_SECONDS, 60)
+    now = time.monotonic()
+    if db is None and ttl > 0:
+        async with _DOMAIN_POLICY_CACHE_LOCK:
+            cached = _DOMAIN_POLICY_CACHE.get(domain)
+            if cached and cached[0] > now:
+                return dict(cached[1])
+
+    override: dict[str, Any] = {}
+    try:
+        if db is not None:
+            policy = await _query_domain_policy(db, domain)
+        else:
+            from app.database import async_session
+
+            async with async_session() as session:
+                policy = await _query_domain_policy(session, domain)
+        override = _policy_row_to_override(policy)
+    except Exception as exc:  # pragma: no cover - defensive fallback
+        logger.debug("Failed to read crawl policy from db for %s: %s", domain, exc)
+
+    if db is None and ttl > 0:
+        async with _DOMAIN_POLICY_CACHE_LOCK:
+            _DOMAIN_POLICY_CACHE[domain] = (now + ttl, dict(override))
+    return override
+
+
+async def get_domain_policy_snapshot(domain: str, db: AsyncSession) -> dict[str, Any] | None:
+    domain = normalize_domain(domain)
+    if not domain:
+        return None
+    policy = await _query_domain_policy(db, domain)
+    if policy is None:
+        return None
+    return {
+        "domain": policy.domain,
+        "wait_for_chain": policy.wait_for_chain,
+        "timeouts_ms": policy.timeouts_ms,
+        "simulate_user": policy.simulate_user,
+        "magic": policy.magic,
+        "probe_status": policy.probe_status,
+        "probe_sample_size": policy.probe_sample_size,
+        "probe_success_rate": policy.probe_success_rate,
+        "probe_avg_duration_ms": policy.probe_avg_duration_ms,
+        "probe_last_error": policy.probe_last_error,
+        "probe_last_run_at": policy.probe_last_run_at,
+    }
+
+
 def _build_default_timeouts(attempt_count: int) -> list[int]:
     base = _to_positive_int(settings.CRAWL_PAGE_TIMEOUT_MS, 45000)
     values = [base, max(base, 75000), max(base, 90000)]
@@ -245,10 +356,13 @@ def _normalize_wait_for_list(value: Any) -> list[str]:
     return []
 
 
-def _build_attempt_plan(url: str) -> tuple[list[CrawlAttemptConfig], dict[str, Any]]:
+def _build_attempt_plan(url: str, override: dict[str, Any] | None = None) -> tuple[list[CrawlAttemptConfig], dict[str, Any]]:
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower()
-    override = _load_domain_overrides().get(host, {})
+    if override is None:
+        override = _load_domain_overrides().get(host, {})
+    else:
+        override = dict(override)
 
     max_retries = _to_non_negative_int(settings.CRAWL_MAX_RETRIES, 2)
     override_retries = override.get("max_retries")
@@ -282,7 +396,42 @@ def _get_override_bool(override: dict[str, Any], key: str, default: bool) -> boo
     return value if isinstance(value, bool) else default
 
 
-async def crawl_article_content_with_meta(url: str) -> CrawlResult:
+async def get_effective_domain_policy(domain: str, db: AsyncSession | None = None) -> dict[str, Any]:
+    domain = normalize_domain(domain)
+    if not domain:
+        plan, _ = _build_attempt_plan("https://example.com", override={})
+        return {
+            "source": "default",
+            "wait_for_chain": [item.wait_for for item in plan],
+            "timeouts_ms": [item.page_timeout_ms for item in plan],
+            "simulate_user": settings.CRAWL_SIMULATE_USER,
+            "magic": settings.CRAWL_MAGIC,
+        }
+
+    override: dict[str, Any] = {}
+    source = "default"
+
+    db_override = await _load_db_domain_override(domain, db=db)
+    if db_override:
+        override = db_override
+        source = "db"
+    else:
+        env_override = _load_domain_overrides().get(domain, {})
+        if env_override:
+            override = env_override
+            source = "env"
+
+    plan, resolved = _build_attempt_plan(f"https://{domain}", override=override)
+    return {
+        "source": source,
+        "wait_for_chain": [item.wait_for for item in plan],
+        "timeouts_ms": [item.page_timeout_ms for item in plan],
+        "simulate_user": _get_override_bool(resolved, "simulate_user", settings.CRAWL_SIMULATE_USER),
+        "magic": _get_override_bool(resolved, "magic", settings.CRAWL_MAGIC),
+    }
+
+
+async def crawl_article_content_with_meta(url: str, *, policy_override: dict[str, Any] | None = None) -> CrawlResult:
     """Crawl article full text using Crawl4AI and return structured result."""
     started = time.monotonic()
     try:
@@ -308,7 +457,15 @@ async def crawl_article_content_with_meta(url: str) -> CrawlResult:
         total_duration_ms = int((time.monotonic() - started) * 1000)
         return CrawlResult(None, error, attempts=1, total_duration_ms=total_duration_ms, attempt_errors=[error])
 
-    attempt_plan, override = _build_attempt_plan(url)
+    if policy_override is not None:
+        attempt_plan, override = _build_attempt_plan(url, override=policy_override)
+    else:
+        domain = extract_domain_from_url(url)
+        db_override = await _load_db_domain_override(domain)
+        if db_override:
+            attempt_plan, override = _build_attempt_plan(url, override=db_override)
+        else:
+            attempt_plan, override = _build_attempt_plan(url)
     attempt_errors: list[CrawlError] = []
     simulate_user = _get_override_bool(override, "simulate_user", settings.CRAWL_SIMULATE_USER)
     magic = _get_override_bool(override, "magic", settings.CRAWL_MAGIC)

@@ -1,7 +1,7 @@
 """Test that all models are importable and metadata is correct."""
 from app.models import (
     Base, RssSource, News, Briefing, BriefingItem,
-    LlmConfig, TaskConfig, ImportanceExample, ProcessingConfig,
+    LlmConfig, TaskConfig, ImportanceExample, ProcessingConfig, CrawlDomainPolicy,
     ProcessStatus, NewsCategory, BriefingStatus, LlmTaskType,
 )
 
@@ -11,6 +11,7 @@ def test_all_tables_registered():
     expected = {
         "rss_sources", "news", "briefings", "briefing_items",
         "llm_configs", "task_configs", "importance_examples", "processing_configs",
+        "crawl_domain_policies",
     }
     assert tables == expected
 

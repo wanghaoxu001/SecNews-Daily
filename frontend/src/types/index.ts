@@ -71,6 +71,12 @@ export interface RssSource {
   url: string
   enabled: boolean
   description: string | null
+  domain: string | null
+  probe_status: string | null
+  probe_last_run_at: string | null
+  probe_last_error: string | null
+  effective_wait_for_chain: string[] | null
+  effective_timeouts_ms: number[] | null
   created_at: string
   updated_at: string
 }

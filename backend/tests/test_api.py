@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import AsyncMock, patch
 
 
 @pytest.mark.asyncio
@@ -35,6 +36,7 @@ async def test_rss_source_crud(client, auth_headers):
     source = resp.json()
     source_id = source["id"]
     assert source["name"] == "Test Feed"
+    assert source["domain"] == "example.com"
 
     # Read
     resp = await client.get(f"/api/v1/rss-sources/{source_id}", headers=auth_headers)
@@ -60,6 +62,46 @@ async def test_rss_source_crud(client, auth_headers):
 
     # Verify deleted
     resp = await client.get(f"/api/v1/rss-sources/{source_id}", headers=auth_headers)
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_rss_source_probe_policy_endpoint(client, auth_headers):
+    create_resp = await client.post(
+        "/api/v1/rss-sources",
+        json={"name": "Probe Feed", "url": "https://example.com/rss"},
+        headers=auth_headers,
+    )
+    assert create_resp.status_code == 201
+    source_id = create_resp.json()["id"]
+
+    fake_payload = {
+        "domain": "example.com",
+        "wait_for_chain": ["css:main, body", "css:body", "css:body"],
+        "timeouts_ms": [45000, 75000, 90000],
+        "simulate_user": True,
+        "magic": True,
+        "probe_status": "success",
+        "probe_sample_size": 3,
+        "probe_success_rate": 1.0,
+        "probe_avg_duration_ms": 5200,
+        "probe_last_error": None,
+        "probe_last_run_at": None,
+        "effective_wait_for_chain": ["css:main, body", "css:body", "css:body"],
+        "effective_timeouts_ms": [45000, 75000, 90000],
+        "effective_source": "db",
+    }
+
+    with patch("app.api.v1.rss_sources.probe_domain_policy_for_source", new=AsyncMock(return_value=fake_payload)):
+        probe_resp = await client.post(f"/api/v1/rss-sources/{source_id}/probe-crawl-policy", headers=auth_headers)
+
+    assert probe_resp.status_code == 200
+    assert probe_resp.json()["probe_status"] == "success"
+
+
+@pytest.mark.asyncio
+async def test_get_crawl_policy_not_found(client, auth_headers):
+    resp = await client.get("/api/v1/crawl-policies/nonexistent.example.com", headers=auth_headers)
     assert resp.status_code == 404
 
 

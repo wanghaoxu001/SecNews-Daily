@@ -7,6 +7,7 @@ from app.models.llm_config import LlmConfig
 from app.models.task_config import TaskConfig
 from app.models.importance_example import ImportanceExample
 from app.models.processing_config import ProcessingConfig
+from app.models.crawl_domain_policy import CrawlDomainPolicy
 
 __all__ = [
     "Base",
@@ -23,4 +24,5 @@ __all__ = [
     "TaskConfig",
     "ImportanceExample",
     "ProcessingConfig",
+    "CrawlDomainPolicy",
 ]
