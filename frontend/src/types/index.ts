@@ -13,6 +13,11 @@ export interface News {
   category: string | null
   process_status: string
   process_error: string | null
+  crawl_error_code: string | null
+  crawl_error_detail: string | null
+  crawl_attempts: number | null
+  crawl_last_duration_ms: number | null
+  crawl_last_attempt_at: string | null
   is_similar: boolean
   similar_to_id: number | null
   similarity_details: Record<string, unknown> | null

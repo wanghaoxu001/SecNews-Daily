@@ -79,6 +79,7 @@ async def run_source_pipeline(db: AsyncSession, source: RssSource) -> AsyncGener
                 yield _event(
                     "process", "info",
                     f"{prefix} {progress['message']}",
+                    detail=progress.get("detail"),
                     duration_ms=progress.get("duration_ms"),
                 )
 

@@ -1,6 +1,7 @@
 import logging
 import re
 import time
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.news import News
 from app.models.enums import ProcessStatus
 from app.services.translator import translate_text, is_chinese
-from app.services.content_crawler import crawl_article_content
+from app.services.content_crawler import crawl_article_content_with_meta, format_crawl_result_detail
 from app.services.summarizer import generate_summary
 from app.services.classifier import classify_news
 
@@ -19,12 +20,20 @@ MIN_SUMMARY_ZH_LEN = 100
 WHITESPACE_RE = re.compile(r"\s+")
 
 
-def _progress(message: str, *, duration_ms: int | None = None, result: str | None = None) -> dict:
+def _progress(
+    message: str,
+    *,
+    duration_ms: int | None = None,
+    result: str | None = None,
+    detail: str | None = None,
+) -> dict:
     p = {"message": message}
     if duration_ms is not None:
         p["duration_ms"] = duration_ms
     if result is not None:
         p["result"] = result
+    if detail is not None:
+        p["detail"] = detail
     return p
 
 
@@ -87,13 +96,27 @@ async def process_single_news_gen(db: AsyncSession, news: News):
                     yield _progress("正在抓取文章正文...")
 
                 t0 = time.monotonic()
-                crawled_content = await crawl_article_content(news.url)
+                crawl_result = await crawl_article_content_with_meta(news.url)
                 elapsed = int((time.monotonic() - t0) * 1000)
-                if crawled_content:
-                    news.content = crawled_content
+                if crawl_result.content:
+                    news.content = crawl_result.content
+                crawl_detail = format_crawl_result_detail(crawl_result)
+                if not crawl_result.error and crawl_result.attempts <= 1:
+                    crawl_detail = None
+
+                news.crawl_attempts = crawl_result.attempts
+                news.crawl_last_duration_ms = crawl_result.total_duration_ms
+                news.crawl_last_attempt_at = datetime.now(timezone.utc)
+                if crawl_result.error:
+                    news.crawl_error_code = crawl_result.error.code
+                    news.crawl_error_detail = format_crawl_result_detail(crawl_result)
+                    logger.warning("Crawl failed for news %s: %s", news.id, news.crawl_error_detail)
+                else:
+                    news.crawl_error_code = None
+                    news.crawl_error_detail = None
 
                 if _has_usable_content(news.content):
-                    yield _progress("正文抓取完成", duration_ms=elapsed)
+                    yield _progress("正文抓取完成", duration_ms=elapsed, detail=crawl_detail)
                     yield _progress("正在生成中文摘要...")
                     t0 = time.monotonic()
                     news.summary_zh = await generate_summary(db, news.content or "")
@@ -101,18 +124,18 @@ async def process_single_news_gen(db: AsyncSession, news: News):
                     yield _progress("摘要生成完成", duration_ms=elapsed, result=_truncate(news.summary_zh))
                 else:
                     if news.content:
-                        yield _progress("正文抓取完成（内容较短）", duration_ms=elapsed)
+                        yield _progress("正文抓取完成（内容较短）", duration_ms=elapsed, detail=crawl_detail)
                     else:
-                        yield _progress("正文抓取完成（无内容）", duration_ms=elapsed)
+                        yield _progress("正文抓取完成（无内容）", duration_ms=elapsed, detail=crawl_detail)
 
                     # If crawling fails, keeping a short translated summary is acceptable.
                     if news.summary_zh:
                         logger.info(f"Crawl unavailable for news {news.id}; keeping short summary")
-                        yield _progress("原文抓取失败，保留当前较短摘要")
+                        yield _progress("原文抓取失败，保留当前较短摘要", detail=crawl_detail)
                     else:
                         news.summary_zh = ""
                         logger.warning(f"No usable content or summary available for news {news.id}")
-                        yield _progress("无法获取有效正文和摘要，摘要置空")
+                        yield _progress("无法获取有效正文和摘要，摘要置空", detail=crawl_detail)
 
         # Step 2: Translate title
         if not news.title_zh:

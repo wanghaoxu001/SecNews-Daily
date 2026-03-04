@@ -35,6 +35,11 @@ class News(TimestampMixin, Base):
         String(30), default=ProcessStatus.pending.value, index=True
     )
     process_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    crawl_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    crawl_error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    crawl_attempts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    crawl_last_duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    crawl_last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Embedding
     embedding: Mapped[list | None] = mapped_column(Vector(1536), nullable=True)

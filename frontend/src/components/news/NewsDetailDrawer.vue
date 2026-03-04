@@ -24,6 +24,31 @@
         <h4>原文摘要</h4>
         <p>{{ news.summary || '暂无' }}</p>
 
+        <div
+          v-if="
+            news.crawl_error_code ||
+            news.crawl_error_detail ||
+            news.crawl_attempts != null ||
+            news.crawl_last_duration_ms != null ||
+            news.crawl_last_attempt_at
+          "
+        >
+          <h4>抓取诊断</h4>
+          <n-descriptions :column="1" bordered size="small" class="news-drawer__meta">
+            <n-descriptions-item label="错误码">{{ news.crawl_error_code || '无' }}</n-descriptions-item>
+            <n-descriptions-item label="错误详情">{{ news.crawl_error_detail || '无' }}</n-descriptions-item>
+            <n-descriptions-item label="尝试次数">
+              {{ news.crawl_attempts == null ? '未知' : news.crawl_attempts }}
+            </n-descriptions-item>
+            <n-descriptions-item label="抓取耗时">
+              {{ news.crawl_last_duration_ms == null ? '未知' : `${news.crawl_last_duration_ms}ms` }}
+            </n-descriptions-item>
+            <n-descriptions-item label="最近尝试">
+              {{ formatTime(news.crawl_last_attempt_at) }}
+            </n-descriptions-item>
+          </n-descriptions>
+        </div>
+
         <div v-if="news.importance_reason">
           <h4>重要性理由</h4>
           <p>{{ news.importance_reason }}</p>

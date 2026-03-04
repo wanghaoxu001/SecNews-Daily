@@ -22,6 +22,11 @@ class NewsResponse(BaseModel):
     category: str | None = None
     process_status: str
     process_error: str | None = None
+    crawl_error_code: str | None = None
+    crawl_error_detail: str | None = None
+    crawl_attempts: int | None = None
+    crawl_last_duration_ms: int | None = None
+    crawl_last_attempt_at: datetime | None = None
     is_similar: bool = False
     similar_to_id: int | None = None
     similarity_details: dict | None = None
