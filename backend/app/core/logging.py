@@ -1,23 +1,47 @@
 import logging
 import sys
 import time
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 
 
-def setup_logging(level: str = "INFO") -> None:
-    """Configure root logger with stdout handler and suppress noisy third-party loggers."""
+def setup_logging(
+    level: str = "INFO",
+    log_to_file: bool = False,
+    log_file_path: str = "logs/backend.log",
+    log_file_max_bytes: int = 10485760,
+    log_file_backup_count: int = 7,
+) -> None:
+    """Configure root logger with stdout and optional rotating file output."""
     root = logging.getLogger()
     root.handlers.clear()
     root.setLevel(level.upper())
 
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(
-        logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
-    )
-    root.addHandler(handler)
+    formatter = logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
+
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(formatter)
+    root.addHandler(stdout_handler)
+
+    if log_to_file:
+        try:
+            log_path = Path(log_file_path)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+
+            file_handler = RotatingFileHandler(
+                log_path,
+                maxBytes=max(1, log_file_max_bytes),
+                backupCount=max(1, log_file_backup_count),
+                encoding="utf-8",
+            )
+            file_handler.setFormatter(formatter)
+            root.addHandler(file_handler)
+        except OSError as exc:
+            root.warning("Failed to initialize file logging at %s: %s", log_file_path, exc)
 
     for name in ("httpx", "httpcore", "apscheduler", "uvicorn.access"):
         logging.getLogger(name).setLevel(logging.WARNING)

@@ -8,7 +8,13 @@ from app.config import settings
 from app.core.logging import RequestLoggingMiddleware, setup_logging
 from app.services.scheduler import start_scheduler, stop_scheduler
 
-setup_logging(settings.LOG_LEVEL)
+setup_logging(
+    settings.LOG_LEVEL,
+    log_to_file=settings.LOG_TO_FILE,
+    log_file_path=settings.LOG_FILE_PATH,
+    log_file_max_bytes=settings.LOG_FILE_MAX_BYTES,
+    log_file_backup_count=settings.LOG_FILE_BACKUP_COUNT,
+)
 
 
 @asynccontextmanager

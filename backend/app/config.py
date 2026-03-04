@@ -9,6 +9,10 @@ class Settings(BaseSettings):
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: str = "admin123"
     LOG_LEVEL: str = "INFO"
+    LOG_TO_FILE: bool = False
+    LOG_FILE_PATH: str = "logs/backend.log"
+    LOG_FILE_MAX_BYTES: int = 10485760
+    LOG_FILE_BACKUP_COUNT: int = 7
     CRAWL_BROWSER_TYPE: str = "chromium"
     CRAWL_HEADLESS: bool = True
     CRAWL_PAGE_TIMEOUT_MS: int = 45000

@@ -29,6 +29,17 @@ docker compose up --build
 | `JWT_SECRET` | JWT 签名密钥 | `change-me-to-a-random-string` |
 | `ADMIN_USERNAME` | 管理员用户名 | `admin` |
 | `ADMIN_PASSWORD` | 管理员密码 | `admin123` |
+| `LOG_LEVEL` | 日志等级 | `INFO` |
+| `LOG_TO_FILE` | 是否写入文件日志 | `true`（Compose 默认） |
+| `LOG_FILE_PATH` | 日志文件路径 | `logs/backend.log` |
+| `LOG_FILE_MAX_BYTES` | 单文件最大大小（字节） | `10485760` |
+| `LOG_FILE_BACKUP_COUNT` | 滚动保留文件数 | `7` |
+
+## 日志持久化
+
+- 后端日志同时输出到容器 stdout 与滚动文件日志。
+- `docker-compose` 默认挂载 `./logs/backend:/app/logs`，容器重建后日志仍保留在宿主机。
+- 常用查看命令：`docker compose logs -f backend`（stdout）和 `tail -f logs/backend/backend.log`（文件）。
 
 ## 开发
 

@@ -214,6 +214,9 @@ __marimo__/
 # OS / local artifacts
 .DS_Store
 
+# Local logs
+logs/
+
 # Frontend build / test artifacts
 frontend/tsconfig.tsbuildinfo
 frontend/test-results/
