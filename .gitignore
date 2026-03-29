@@ -225,3 +225,8 @@ frontend/playwright-report/
 # Local screenshot files
 截屏*.png
 Screenshot*.png
+
+# Local data samples and environment-specific helper files
+articles_export_analysis_*.csv
+待打标记*.csv
+proxy_profiles/
