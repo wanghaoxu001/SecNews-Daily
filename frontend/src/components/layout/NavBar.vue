@@ -65,6 +65,7 @@ const currentRoute = computed(() => (route.name as string) || 'TodayNews')
 const menuOptions = [
   { label: '今日新闻', key: 'TodayNews' },
   { label: '快报列表', key: 'BriefingList' },
+  { label: 'CSV 打标', key: 'TaggerTemp' },
   { label: '管理', key: 'Management' },
 ]
 

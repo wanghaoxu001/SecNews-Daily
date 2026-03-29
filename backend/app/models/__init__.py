@@ -8,6 +8,7 @@ from app.models.task_config import TaskConfig
 from app.models.importance_example import ImportanceExample
 from app.models.processing_config import ProcessingConfig
 from app.models.crawl_domain_policy import CrawlDomainPolicy
+from app.models.tagging_task import TaggingTask, TaggingTaskItem
 
 __all__ = [
     "Base",
@@ -25,4 +26,6 @@ __all__ = [
     "ImportanceExample",
     "ProcessingConfig",
     "CrawlDomainPolicy",
+    "TaggingTask",
+    "TaggingTaskItem",
 ]

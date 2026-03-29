@@ -132,3 +132,45 @@ export interface TokenResponse {
   access_token: string
   token_type: string
 }
+
+export interface TaggingTaskListItem {
+  id: number
+  original_file_name: string
+  status: string
+  total_count: number
+  current_index: number
+  labeled_count: number
+  imported_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TaggingTaskItem {
+  id: number
+  task_id: number
+  row_index: number
+  title: string
+  summary: string | null
+  category: string
+  reason: string | null
+  is_important: boolean | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TaggingTaskDetailResponse {
+  task: TaggingTaskListItem
+  current_item: TaggingTaskItem | null
+  items: TaggingTaskItem[]
+}
+
+export interface UpdateTaggingTaskItemResponse {
+  task: TaggingTaskListItem
+  item: TaggingTaskItem
+}
+
+export interface ImportTaggingTaskResponse {
+  task: TaggingTaskListItem
+  imported_count: number
+  skipped_count: number
+}

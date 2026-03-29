@@ -39,4 +39,8 @@ export const queryKeys = {
   importanceExamples: {
     all: (category?: string) => ['importance-examples', 'all', category ?? 'all'] as const,
   },
+  taggingTasks: {
+    list: ['tagging-tasks', 'list'] as const,
+    detail: (id: number) => ['tagging-tasks', 'detail', id] as const,
+  },
 }

@@ -11,6 +11,7 @@ from app.api.v1.news import router as news_router
 from app.api.v1.pipeline import router as pipeline_router
 from app.api.v1.briefings import router as briefings_router
 from app.api.v1.briefing_items import router as briefing_items_router
+from app.api.v1.tagging_tasks import router as tagging_tasks_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth_router)
@@ -24,3 +25,4 @@ api_router.include_router(news_router)
 api_router.include_router(pipeline_router)
 api_router.include_router(briefings_router)
 api_router.include_router(briefing_items_router)
+api_router.include_router(tagging_tasks_router)

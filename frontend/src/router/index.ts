@@ -31,6 +31,11 @@ const routes = [
     name: 'Management',
     component: () => import('../views/ManagementView.vue'),
   },
+  {
+    path: '/tagger',
+    name: 'TaggerTemp',
+    component: () => import('../views/TaggerTempView.vue'),
+  },
 ]
 
 const router = createRouter({
