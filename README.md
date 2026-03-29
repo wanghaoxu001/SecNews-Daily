@@ -13,7 +13,7 @@ cp .env.example .env
 docker compose up --build
 
 # 3. 访问
-# 前端: http://localhost:3000
+# 前端: http://localhost:3002
 # 后端 API: http://localhost:8000/api/health
 # API 文档: http://localhost:8000/docs
 ```
